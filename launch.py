@@ -18,6 +18,8 @@ if __name__ == '__main__':
                         help='Choose a predefined configuration')
     parser.add_argument('--load_path', type=str, default='game.ckpt',
                         help='Load path for simulation state (ignored if --style is set)')
+    parser.add_argument('--max_creatures', type=int, default=None,
+                        help='Override max_creatures from the chosen config (GPU memory scales linearly with it)')
 
     benchmark_opts = parser.add_argument_group('Benchmarking options')
     benchmark_opts.add_argument('--style', choices=['nsys', 'torch-profile', 'cuda-events', 'tune-hyperparams'],
@@ -37,10 +39,14 @@ if __name__ == '__main__':
             cfg = config.Config()
 
         case 'large':
-            cfg = config.Config(start_creatures=8192, max_creatures=262144, size=5000, food_cover_decr=0.2,
+            cfg = config.Config(start_creatures=8192, max_creatures=131072, size=5000, food_cover_decr=0.2,
                                 cell_size=16.0, max_per_cell=40,
                                 food_sight=4, size_range=(0.1, 5.0),
                                 brain_size=(50, 40))
+
+    if args.max_creatures is not None:
+        cfg.max_creatures = args.max_creatures
+        cfg.start_creatures = min(cfg.start_creatures, cfg.max_creatures)
 
     if args.seed >= 0:
         torch.random.manual_seed(args.seed)
