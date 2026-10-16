@@ -102,3 +102,38 @@ Next, open `log_name.nsys-rep` in NVIDIA NSight Compute and look at the CUDA HW 
  - Plot manager to enable better GUI resizing, especially to adjust for different monitor resolutions.
  - Sexual reproduction
  - Unique food sources based on creature species to allow different niches to co-exist.
+
+## Implementation Effort
+
+Rough estimates for one developer familiar with the codebase. A large hidden cost for the gameplay features is tuning the ecosystem so the new mechanic produces interesting behaviour rather than mass extinction or runaway growth.
+
+| Feature | Effort | Difficulty |
+|---|---|---|
+| Non-uniform food growth | 1–2 days | Easy |
+| Slow environmental changes | 1–3 days (after non-uniform growth) | Easy–medium |
+| More plots / custom plots | 1–2 days for fixed plots, ~1 week for custom | Easy–medium |
+| Plot manager / resizing | 2–4 days | Easy–medium |
+| Species-specific food | 1–2 weeks | Medium–hard |
+| Sexual reproduction | 1–2 weeks | Medium–hard |
+| RL | 3–6+ weeks | Hard, partly research |
+
+**Non-uniform food growth.** Add a per-cell growth-rate map (e.g. smoothed noise) as an argument to `kernels/grow.cu` and multiply the growth amount by it. Save it in checkpoints and optionally show it on the heatmap. Costs ~100 MB of GPU memory at `size=5000`.
+
+**Slow environmental changes.** Make the growth map change over time (drifting fertile zones, seasonal cycles). Computing it from `state.time` keeps checkpoints simple. `CFG_*` values are baked into kernels at compile time, so anything that changes at runtime must be passed as a kernel argument (as is already done for `food_cover_decr`).
+
+**More plots / custom plots.** `MetricTracker` already takes any function and poll rate and is saved in checkpoints, so each fixed plot (population, mean size, mean age, ...) is a few hours. Choosing plots at runtime means a menu of trait × statistic (mean, std, histogram).
+
+**Plot manager.** Window positions are computed by hand from fixed widths and resizing is disabled. Switching to imgui docking (supported by `imgui_bundle`) would fix this. Best done before adding more plots.
+
+**Species-specific food.** Use several food grids, with a creature's color or a new mutable trait choosing which one it eats. Touches the eat and grow kernels, the heatmap, and the checkpoint format (old checkpoints need migration). Each extra food type adds 81 brain inputs at `food_sight=4`; with 3 types the first layer grows from 130 to 292 inputs, nearly doubling per-creature GPU memory. Letting each creature see only the food type it eats avoids this. Works best after non-uniform growth so niches are spatially separated.
+
+**Sexual reproduction.**
+- *Mate finding on the GPU:* reuse the cell grid from attacks/vision, define compatibility (both mature, enough energy, similar color), and prevent a creature mating more than once per step (e.g. claiming partners atomically).
+- *Combining parents:* `reproduce_mutable` in `creature_trait.py` mutates a single parent; it needs a second parent and a crossover rule. Averaging network weights tends to produce worse brains, so swapping whole neurons is preferable.
+- *Energy:* split the reproduction cost between both parents.
+
+Keeping asexual reproduction as a config option reduces risk.
+
+**RL.** Gradients are disabled globally in `launch.py`, actions are deterministic (most RL methods need stochastic actions), and the memory feedback makes brains effectively recurrent. Requires choosing a reward (e.g. energy gained) and an algorithm (e.g. per-creature policy gradients), and deciding whether learned weights are inherited. An Adam-style optimizer roughly triples weight memory (~13–14 GB at 131k creatures). A cheaper alternative is lifetime plasticity via a local update rule with no gradients (~1 week): not true RL, but may capture much of the "learn faster" benefit.
+
+**Suggested order:** non-uniform food growth → environmental changes → plot manager → more plots → species-specific food → sexual reproduction → RL. The early items are cheap, build on each other, and provide the plots needed to tune the expensive ones.
