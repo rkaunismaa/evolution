@@ -10,3 +10,10 @@ log/
 **/*.qdstrm
 venv/
 ClaudeResume.txt
+# unused sprite drafts
+assets/arrow.png
+assets/arrowhead.png
+assets/creature_sprite.png
+assets/grey_square_creature_sprite.png
+assets/square_creature_circle.png
+assets/square_creature_sprite.png
