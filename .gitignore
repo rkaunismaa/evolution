@@ -7,3 +7,6 @@
 **/*.nsys-rep
 imgui.ini
 log/
+**/*.qdstrm
+venv/
+ClaudeResume.txt
