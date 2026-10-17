@@ -5,6 +5,7 @@
 **/*.ncu-rep
 **/.vscode
 **/*.nsys-rep
+**/*.sqlite
 imgui.ini
 log/
 **/*.qdstrm
