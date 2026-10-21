@@ -161,6 +161,10 @@ class Config:
     cell_size: float = 16.0   # width of cells when doing gridded/celled ray tracing
     cache_size: int = 32    # number of creatures to cache when doing gridded/celled ray tracing (power of 2)
     use_cache: int = 0   # whether to use the cache when doing gridded ray tracing (1 = enabled, 0 = disabled)
+    # run killing/reproduction (and the memory rearranging that follows) only every this many steps.
+    # Most of its cost is fixed per call, so >1 is much faster, at the price of dead creatures lingering
+    # and eligible creatures waiting for up to (kill_reproduce_every - 1) extra steps
+    kill_reproduce_every: int = 1
 
 
     ### Game Settings

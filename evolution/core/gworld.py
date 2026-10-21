@@ -196,7 +196,8 @@ class GWorld():
         attacks2 = self.compute_gridded_attacks(*celled_world)
 
         self.do_attacks(attacks2)  # update health and energy of creatures
-        self.fused_kill_reproduce()
+        if self.state.time % self.cfg.kill_reproduce_every == 0:
+            self.fused_kill_reproduce()
         self.creatures_eat_grow()   # give energy for being in a square, and then reduce that energy
 
     @Profile.cuda_profile
