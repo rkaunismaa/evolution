@@ -7,8 +7,9 @@ from tests.conftest import requires_cuda
 pytestmark = requires_cuda
 
 
-def _reference_eat_grow(world):
+def _reference_eat_grow(world, grow=True, step_mult=1):
     """Pure-PyTorch version of Creatures.eat_grow (kernels setup_eat_grid, eat, grow).
+    grow=False applies only the eating updates; step_mult scales the growth step.
     Returns new (food_grid, energies, healths, ages, age_mults)."""
     cfg, c = world.cfg, world.creatures
     assert cfg.alive_cost.expr == '0.01f * x', "reference hard-codes the default alive_cost"
@@ -40,9 +41,12 @@ def _reference_eat_grow(world):
     updates = torch.zeros(W * W, device=food_grid.device).index_add_(0, cell, food + cfg.food_cover_decr)
     ages = ages + 1
 
+    if not grow:
+        return (food_grid - updates.view(W, W)), energies, healths, ages, age_mults
+
     # grow (padding untouched)
     f = food_grid.view(-1) - updates
-    growth = cfg.food_step_size * (cfg.max_food - f)
+    growth = cfg.food_step_size * step_mult * (cfg.max_food - f)
     f = torch.where(f < 0, f + growth * cfg.food_recovery_rate,
                     torch.where(f > cfg.max_food, f + growth * cfg.food_decay_rate,
                                 f + growth * cfg.food_growth_rate))
@@ -90,3 +94,23 @@ def test_hsv_spiral_maps_zero_to_black_and_colors_into_range(make_world):
     assert rgb.shape == (256, 3)
     assert torch.equal(rgb[0], torch.zeros(3, device='cuda'))
     assert rgb.min() >= 0 and rgb.max() <= 255
+
+
+@pytest.mark.parametrize("crowded", [False, True])
+def test_batched_food_growth_matches_reference(make_world, crowded):
+    """food_grow_every=4: steps that are not multiples of 4 only apply eating (at creature cells);
+    multiples of 4 grow the whole grid by 4x the step."""
+    world = make_world(size=40, food_grow_every=4) if crowded else make_world(food_grow_every=4)
+    c = world.creatures
+    for _ in range(30):
+        world.step()
+    if crowded:
+        c.positions.data[:] = torch.rand_like(c.positions.data) * 3 + 10
+    names = ["food_grid", "energies", "healths", "ages", "age_mults"]
+    for t, grows in ((41, False), (42, False), (44, True)):
+        world.state.time = t
+        ref = _reference_eat_grow(world, grow=grows, step_mult=4)
+        c.eat_grow(world.food_grid, world.state)
+        got = (world.food_grid, c.energies.data, c.healths.data, c.ages.data, c.age_mults.data)
+        for name, g, r in zip(names, got, ref):
+            torch.testing.assert_close(g, r, rtol=1e-4, atol=1e-4, msg=f"{name} at time {t}")

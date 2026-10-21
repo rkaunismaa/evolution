@@ -296,19 +296,27 @@ class Creatures:
         # grow food, apply eating costs
         # step_size = (torch.sum(alive_costs)/self.cfg.max_food/(self.cfg.size**2)).item()
         # step_size = (self.cfg.max_food / (self.cfg.size**(1.9)))#.item()
-        step_size = self.cfg.food_step_size
-        threads_per_block = (16, 16)
-        blocks_per_grid = (food_grid.shape[0] // threads_per_block[0] + 1,
-                           food_grid.shape[1] // threads_per_block[1] + 1)
+        touched = pos[:, 1].long() * food_grid.shape[1] + pos[:, 0].long()
+        if state.time % self.cfg.food_grow_every == 0:
+            # growing touches every cell, so we only do it every food_grow_every steps, with a
+            # proportionally larger step (the grow kernel also applies this step's eating updates)
+            step_size = self.cfg.food_step_size * self.cfg.food_grow_every
+            threads_per_block = (16, 16)
+            blocks_per_grid = (food_grid.shape[0] // threads_per_block[0] + 1,
+                               food_grid.shape[1] // threads_per_block[1] + 1)
 
-
-        self.kernels('grow', blocks_per_grid, threads_per_block,
-                     food_grid_updates, food_grid, food_grid.shape[0], self.pad, step_size, self.cfg.max_food)
+            self.kernels('grow', blocks_per_grid, threads_per_block,
+                         food_grid_updates, food_grid, food_grid.shape[0], self.pad, step_size, self.cfg.max_food)
+        else:
+            # no growth this step: just apply the eating updates, which are only at creatures' cells
+            # (duplicate indices all write the same value, so cells with several creatures are fine)
+            step_size = 0.0
+            flat = food_grid.view(-1)
+            flat[touched] = flat[touched] - food_grid_updates.view(-1)[touched]
 
         state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size)
         state.selected_creature.extract_post_eat_state(pos, alive_costs)
 
-        touched = pos[:, 1].long() * food_grid.shape[1] + pos[:, 0].long()
         pct_eaten.view(-1).index_fill_(0, touched, 0.)
         food_grid_updates.view(-1).index_fill_(0, touched, 0.)
 

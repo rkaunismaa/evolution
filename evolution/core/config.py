@@ -83,6 +83,9 @@ class Config:
     food_recovery_rate: float = 30.0  # scale to apply to food growth rate when its negative
     food_health_recovery: float = 0.1  # multiple of food eaten that creatures gain as health
     food_step_size: float = 3e-5  # how much food grows each step
+    # grow food only every this many steps, by food_step_size * food_grow_every. Growth passes over the
+    # whole grid, so >1 is cheaper for big worlds; eating is still applied every step
+    food_grow_every: int = 1
 
 
     ### Creatures

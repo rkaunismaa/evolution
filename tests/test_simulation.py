@@ -25,7 +25,8 @@ def _check_invariants(world):
     {"kill_reproduce_every": 4},
     {"brain_dtype": "float16"},
     {"kill_reproduce_every": 4, "brain_dtype": "float16"},
-], ids=["default", "every4", "fp16", "every4+fp16"])
+    {"kill_reproduce_every": 4, "brain_dtype": "float16", "food_grow_every": 4},
+], ids=["default", "every4", "fp16", "every4+fp16", "large-preset-options"])
 def test_invariants_hold_over_many_steps(make_world, opts):
     world = make_world(**opts)
     for step in range(200):

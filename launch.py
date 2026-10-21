@@ -42,7 +42,8 @@ if __name__ == '__main__':
             cfg = config.Config(start_creatures=8192, max_creatures=131072, size=5000, food_cover_decr=0.2,
                                 cell_size=16.0, max_per_cell=40,
                                 food_sight=4, size_range=(0.1, 5.0),
-                                brain_size=(50, 40), kill_reproduce_every=4, brain_dtype='float16')
+                                brain_size=(50, 40), kill_reproduce_every=4, brain_dtype='float16',
+                                food_grow_every=4)
 
     if args.max_creatures is not None:
         cfg.max_creatures = args.max_creatures
