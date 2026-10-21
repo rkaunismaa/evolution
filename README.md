@@ -93,6 +93,16 @@ nsys profile -o <log_name> -w true -t cuda,nvtx,osrt,cudnn,cublas -s none  --cap
 
 Next, open `log_name.nsys-rep` in NVIDIA NSight Compute and look at the CUDA HW row.
 
+## Tests
+
+Run the unit tests with:
+
+```bash
+python3 -m pytest
+```
+
+Tests that need a GPU are skipped when no CUDA device is available. They cover creature memory management (births, deaths and block compaction), the eating and food-growth kernels against plain-PyTorch references, whole-simulation invariants and checkpoint round trips, and the CPU-only utilities.
+
 
 # Planned Features
  - RL to allow creatures to learn much quicker.
