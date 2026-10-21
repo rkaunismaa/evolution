@@ -17,6 +17,7 @@ class QuantizedData:
 
 
 def _quantize(x: Tensor, map_location) -> TensorWithShape:
+    x = x.float()  # quantize_per_channel needs float32 (e.g. float16 brain weights)
     maxs = torch.amax(x, dim=0)
     mins = torch.amin(x, dim=0)
     qmin = -128

@@ -141,7 +141,7 @@ class BrainVisualizer(Subscriber):
         return [self.world.creatures.activations[i][creature_id].squeeze(0) for i in range(len(self.world.creatures.activations))]
 
     def fetch_weights(self, creature_id):
-        return [self.world.creatures.weights[i][creature_id] for i in range(len(self.world.creatures.weights))]
+        return [self.world.creatures.weights[i][creature_id].float() for i in range(len(self.world.creatures.weights))]
 
     def _update(self, creature_id):
         if creature_id is None:

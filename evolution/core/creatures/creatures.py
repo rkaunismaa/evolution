@@ -129,13 +129,14 @@ class Creatures:
         ]
         weights = []
         biases = []
+        brain_dtype = getattr(torch, self.cfg.brain_dtype)
         for prev_layer, next_layer in zip(layer_sizes[:-1], layer_sizes[1:]):
             w_norm = 0.5 * np.sqrt(15. / prev_layer)
             b_norm = 0.5 / np.sqrt(next_layer)
 
             weights.append(CreatureTrait((prev_layer, next_layer),
                                Initializer.mutable('uniform_', -w_norm, w_norm),
-                               None, self.device))
+                               None, self.device, dtype=brain_dtype))
 
             biases.append(CreatureTrait((1, next_layer),
                               Initializer.mutable('uniform_', -b_norm, b_norm),
@@ -356,7 +357,7 @@ class Creatures:
         self.activations.clear()
         for w, b in zip(self.weights, self.biases):
             self.activations.append(inputs)
-            inputs = torch.tanh(inputs @ w + b)
+            inputs = torch.tanh(inputs.to(w.dtype) @ w + b)  # b is float32, so this promotes back to float32
         outputs = inputs.squeeze(dim=1)  # [N, O]
         self.activations.append(inputs)
         self.memories[:] = outputs[:, 2:]  # only 2 outputs actually do something, so the rest are memory

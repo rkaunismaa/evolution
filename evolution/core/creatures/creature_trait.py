@@ -23,8 +23,10 @@ class CreatureTrait:
     reindexing of data so that current memory is valid when the population changes.
     """
     def __init__(self, shape: Tuple[int, ...], init: Initializer,
-                 normalize_func: Normalizer | None, device: torch.device):
+                 normalize_func: Normalizer | None, device: torch.device,
+                 dtype: torch.dtype = torch.float32):
         self._shape = shape
+        self.dtype = dtype  # dtype of the underlying memory (children may be computed in float32)
         self.init = init
         self.normalize_func = normalize_func
         self.device = device
@@ -45,13 +47,13 @@ class CreatureTrait:
     def init_underlying(self, max_creatures: int):
         """Allocate underlying memory. This should only be called
         for root CreatureTraits, and not for any offspring/children CreatureTraits."""
-        self._data = torch.empty(max_creatures, *self._shape, device=self.device)
+        self._data = torch.empty(max_creatures, *self._shape, device=self.device, dtype=self.dtype)
 
     def init_base(self, cfg: Config):
         """Initialize underlying memory and current memory. This should only be called
         for root CreatureTraits, and not for any offspring/children CreatureTraits."""
         self.max_size = cfg.max_creatures
-        self._data = torch.empty(cfg.max_creatures, *self._shape, device=self.device)
+        self._data = torch.empty(cfg.max_creatures, *self._shape, device=self.device, dtype=self.dtype)
         if self.init.style == InitializerStyle.OTHER_DEPENDENT:
             return
         self.data = self.init(self._data[:cfg.start_creatures])
@@ -157,7 +159,7 @@ class CreatureTrait:
             other: Child CreatureTrait whose data we want to write to the parent CreatureTrait.
         """
         try:
-            self._data[idxs] = other.data
+            self._data[idxs] = other.data.to(self._data.dtype)  # children are computed in float32
         except RuntimeError:
             print(self._data.shape, idxs.shape, other.data.shape)
             raise

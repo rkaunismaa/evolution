@@ -90,6 +90,10 @@ class Config:
     ## brains
     brain_size: Tuple[int, ...] = (30, 40) # size of hidden layers of brains
     mem_size: int = 10 # how many output values/input values can be used for memory
+    # storage dtype for brain weight matrices ('float32' or 'float16'). Brain evaluation is bound by
+    # memory bandwidth, so float16 roughly halves its cost (and the weights' GPU memory). Mutations are
+    # still computed in float32 and rounded on write; biases and activations stay float32
+    brain_dtype: str = 'float32'
 
     ## vision
     food_sight: int = 3 # how many squares (grid) away creatures can see food (1 => a 3x3 window centered on them)
