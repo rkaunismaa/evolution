@@ -40,6 +40,7 @@ class Creatures:
         self.offsets = torch.tensor([[i, j] for i in range(-self.pad, self.pad+1)
                                      for j in range(-self.pad, self.pad+1)], device=self.device).unsqueeze(0)
         self.activations = []
+        self._eat_scratch: Tuple[Tensor, Tensor] | None = None  # (pct_eaten, food_grid_updates), see eat_grow
         self.traits = CreatureArray(cfg, device)
         self.generate_from_cfg()
 
@@ -270,15 +271,21 @@ class Creatures:
 
         pos = self.positions.int() + self.pad
 
+        # pct_eaten and food_grid_updates are only ever written at creatures' cells, so we keep them
+        # around between steps and re-zero just those cells at the end, rather than allocating and
+        # zero-filling two full-size grids every step
+        if self._eat_scratch is None or self._eat_scratch[0].shape != food_grid.shape:
+            self._eat_scratch = (torch.zeros_like(food_grid, dtype=torch.float32),
+                                 torch.zeros_like(food_grid, dtype=torch.float32))
+        pct_eaten, food_grid_updates = self._eat_scratch
+
         # calculate how many creatures are in each position, useful for computng how much food each creature eats
-        pct_eaten = torch.zeros_like(food_grid, dtype=torch.float32, device=self.device)
         threads_per_block = 512
         blocks_per_grid = self.population // threads_per_block + 1
         self.kernels('setup_eat_grid', blocks_per_grid, threads_per_block,
                      pos, self.eat_pcts, pct_eaten, self.population, food_grid.shape[0])
 
         # calculate how much food each creature eats, add 1 to ages, update energies, take away living costs
-        food_grid_updates = torch.zeros_like(food_grid, device=self.device)
         alive_costs = torch.zeros(self.population, device=self.device, dtype=torch.float32)
         self.kernels('eat', blocks_per_grid, threads_per_block,
                      pos, self.eat_pcts, pct_eaten, self.sizes, self.age_speeds, food_grid,
@@ -299,6 +306,10 @@ class Creatures:
 
         state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size)
         state.selected_creature.extract_post_eat_state(pos, alive_costs)
+
+        touched = pos[:, 1].long() * food_grid.shape[1] + pos[:, 0].long()
+        pct_eaten.view(-1).index_fill_(0, touched, 0.)
+        food_grid_updates.view(-1).index_fill_(0, touched, 0.)
 
 
     def extract_food_windows(self, indices, food_grid):

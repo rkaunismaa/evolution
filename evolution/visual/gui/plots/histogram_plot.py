@@ -50,13 +50,20 @@ class HistogramPlot(Window):
                 implot.setup_axis_limits(implot.ImAxis_.x1, max(0, latest-20_000), latest,  # type: ignore
                                             cond=imgui.Cond_.always if updated else imgui.Cond_.once)  # type: ignore
 
+                # only hand implot the points inside the visible x-range (plus one on each side), since
+                # plotting all n_bins series over the full history every frame gets slower as the game runs
+                limits = implot.get_plot_limits()
+                times = self.histogram_tracker.times
+                lo = max(0, int(np.searchsorted(times, limits.x.min)) - 1)
+                hi = int(np.searchsorted(times, limits.x.max, side='right')) + 1
+                times = times[lo:hi]
+                all_values = self.histogram_tracker.values[:, lo:hi]
+
                 implot.push_colormap('Histogram Colors')
                 for b in range(self.n_bins):
                     if b == 0:
-                        implot.plot_shaded(f"Color {b}", self.histogram_tracker.times, self.histogram_tracker.values[b])
+                        implot.plot_shaded(f"Color {b}", times, all_values[b])
                     else:
-                        values = self.histogram_tracker.values[b]
-                        prev_values = self.histogram_tracker.values[b-1]
-                        implot.plot_shaded(f"Color {b}", self.histogram_tracker.times, values, prev_values)
+                        implot.plot_shaded(f"Color {b}", times, all_values[b], all_values[b-1])
                 implot.pop_colormap()
                 implot.end_plot()

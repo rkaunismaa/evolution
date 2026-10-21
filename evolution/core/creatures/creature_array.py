@@ -286,9 +286,10 @@ class CreatureArray:
             The updated index of the selected creature (if any). This must be deferred until after the reindex step.
         """
         self.algos['move_block'] += 1
-        window = torch.ones(n_after, device=self.device, dtype=torch.float)
-        # count the number of alive creatures in each window of size n_after
-        windows = torch.conv1d(self.alive[sl].view(1, 1, -1), window.view(1, 1, -1), padding=0).squeeze()
+        # count the number of alive creatures in each window of size n_after (sliding-window sum via
+        # cumsum; alive is 0/1 so the float32 sums are exact)
+        csum = torch.nn.functional.pad(self.alive[sl].cumsum(0), (1, 0))
+        windows = csum[n_after:] - csum[:-n_after]
         best_start = windows.argmax().item() + self.start_idx
         # find the gaps in the best window identified that have to be filled by something
         missing = (1-(self.alive[best_start:best_start+n_after])).nonzero().squeeze(1) + best_start
