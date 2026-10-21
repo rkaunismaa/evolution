@@ -184,7 +184,7 @@ class CreatureArray:
 
         # select and apply block repair strategy
         if n_after == self.cfg.max_creatures:
-            selected_creature_update = self.add_with_deaths_max_array(dead_idxs, other, sl)
+            selected_creature_update = self.add_with_deaths_max_array(dead_idxs, other, sl, state)
         elif num_reproducers >= num_dead:
             selected_creature_update = self.add_with_deaths_fill_gaps(dead_idxs, other, num_dead, num_reproducers, sl, state)
         else:
@@ -201,8 +201,8 @@ class CreatureArray:
             state.selected_creature = selected_creature_update
 
     @Profile.cuda_profile
-    def add_with_deaths_max_array(self, dead_idxs: Tensor, other: Union[None, 'CreatureArray'],  # pylint: disable=useless-return
-                                  sl: slice):
+    def add_with_deaths_max_array(self, dead_idxs: Tensor, other: Union[None, 'CreatureArray'],
+                                  sl: slice, state: GameState) -> int | None:
         """If the number of creatures after death and reproduction will fill the entire buffer,
         we can simply put new creatures in the dead creatures spots, and set start_idx to 0.
 
@@ -210,18 +210,22 @@ class CreatureArray:
             dead_idxs: The indices (into current memory) of the dead creatures.
             other: The CreatureArray that contains the new creatures (if any).
             sl: The slice corresponding to the current block of creatures.
+            state: GameState that includes selected creature
         Returns:
-            None, since the selected creature doesn't get updated with this strategy
+            The updated index of the selected creature (if any), since the block now starts at 0.
         """
         self.algos['max'] += 1
           # if we were already at max capacity, then we can just use dead
         if self.population == self.cfg.max_creatures:
             missing = dead_idxs
-        else: # otherwise, we need to fill in the gaps with new creatures
+        else: # otherwise, we need to fill in the gaps with new creatures, on both sides of the block
             missing = torch.cat([dead_idxs + self.start_idx,
-                                 torch.arange(sl.stop, self.cfg.max_creatures, device=self.device, dtype=torch.int32)])
+                                 torch.arange(0, sl.start, device=self.device, dtype=dead_idxs.dtype),
+                                 torch.arange(sl.stop, self.cfg.max_creatures, device=self.device, dtype=dead_idxs.dtype)])
         self.start_idx = 0
         self.write_new_data(missing, other)
+        if state.selected_creature:
+            return state.selected_creature + sl.start
         return None
 
     @Profile.cuda_profile
