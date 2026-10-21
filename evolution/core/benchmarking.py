@@ -99,9 +99,9 @@ def _benchmark(cfg, init_steps=8000, steps=500, method=BenchmarkMethods.CUDA_EVE
         torch.cuda.cudart().cudaProfilerStop()  # type: ignore
 
     Profile.times['n_maxxed'] = game.n_maxxed / steps
-    Profile.times['algo_max'] = game.creatures.algos['max']
-    Profile.times['algo_fill'] = game.creatures.algos['fill_gaps']
-    Profile.times['algo_move'] = game.creatures.algos['move_block']
+    Profile.times['algo_max'] = game.creatures.traits.algos['max']
+    Profile.times['algo_fill'] = game.creatures.traits.algos['fill_gaps']
+    Profile.times['algo_move'] = game.creatures.traits.algos['move_block']
 
     del game
     cuda_utils.clear_mem()
