@@ -1,13 +1,15 @@
 # Changelog
 
-## 2026-10-16 to 2026-10-21
+## 2026-10-16 to 2026-10-22
 
-The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, and the project has a unit test suite. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
+The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, and new games use the documented food-cover cost. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
 
 ### Changes
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-10-22 | `d2aa419` | `food_cover_scaled=1` in the `small`, `medium` and `large` presets | New games get the intended cost and a correct cell panel; old saves keep the flat cost |
+| 2026-10-22 | `b1f818f` | New `food_cover_scaled` option applies the per-creature food-cover cost | `eat.cu` computed the documented cost but removed a flat cost instead |
 | 2026-10-21 | `b9b9fda` | New `food_grow_every` option grows food every N steps with an N× step; 4 for `large` | Food growth passed over all 25M cells every step, the second-largest GPU cost |
 | 2026-10-21 | `6dca0bc` | pytest suite of 32 tests, `pytest.ini`, README Tests section | The code had no tests; they guard the memory, kernel and performance changes |
 | 2026-10-21 | `4e1fbc9` | Fix crash when births fill the buffer exactly while the creature block does not start at index 0 | Found by the new tests; long games that hit `max_creatures` could crash |
@@ -45,22 +47,36 @@ Measured on the `large` preset, RTX 4090, no window. Runs vary by a few percent,
 
 After these changes the GPU is busy most of each step, so removing the remaining CPU overhead (for example by packing all traits into one array) would gain at most about 35%, and less with more creatures.
 
+### Food cover cost (`b1f818f`, `d2aa419`)
+
+`kernels/eat.cu` computed a per-creature food-cover cost, `food_cover_decr × food_cover_decr_pct × eat_pct`, as documented in `config.py` and shown in the cell info panel, but removed a flat `food_cover_decr` per creature instead. The scaled variable was added in `2762aa9` without switching the line that removes the food over to it.
+
+`food_cover_scaled=1` applies the scaled cost. The presets set it, but the `Config` default stays 0, so older checkpoints keep the flat cost they were made with.
+
+| 20,000-step `large` runs, 2 seeds each | Flat cost | Scaled cost |
+| --- | --- | --- |
+| Mean food level (max 15) | ~10.5, slowly falling | ~13.3, steady |
+| Mean creature size | ~0.79, slowly rising | ~0.70, steady |
+| Population reaches the 131,072 cap | ~step 5,000 | by step 2,500 |
+
+Small creatures, which eat a small share of their cell, destroy up to 100× less food with the scaled cost, so being small is cheaper. In both modes the population then stays at the cap.
+
 ### Crash fix (`4e1fbc9`)
 
 When births brought the population to exactly `max_creatures`, `add_with_deaths_max_array` collected only the free slots inside and to the right of the creature block, then moved the block start to 0. If the block did not start at 0, which is normal after deaths shift it, the left-hand slots were missed, so there were fewer slots than children and writing them failed with a shape mismatch. The selected creature's index was also not shifted. Both are fixed; `test_filling_buffer_when_block_does_not_start_at_zero` reproduces the original crash.
 
 ### Tests
 
-Run with `python3 -m pytest` (35 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (38 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
-| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth); scratch buffers re-zeroed; colour mapping |
+| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost); scratch buffers re-zeroed; colour mapping |
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips |
-| `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers |
+| `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
 
-- `kernels/eat.cu` computes a per-creature food-cover cost (`creature_food_decr`) but removes a flat `food_cover_decr` per creature instead, unlike the config comments and the cell info panel. Fixing it would change game balance, so it is left as is; the kernel tests match the current behaviour.
+- In games loaded from checkpoints made before `food_cover_scaled` existed, the cell info panel still shows the scaled cost while the kernel removes the flat one.
 - `GWorld.from_checkpoint` calls `torch.load` with `weights_only=False`, so loading a checkpoint can run arbitrary code. Only load checkpoints you trust.
