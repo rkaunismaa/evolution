@@ -46,7 +46,7 @@ if __name__ == '__main__':
                                 cell_size=16.0, max_per_cell=40,
                                 food_sight=4, size_range=(0.1, 5.0),
                                 brain_size=(50, 40), kill_reproduce_every=4, brain_dtype='float16',
-                                food_grow_every=4, food_cover_scaled=1)
+                                food_grow_every=4, food_cover_scaled=1, food_capacity_variation=0.5)
 
     if args.max_creatures is not None:
         cfg.max_creatures = args.max_creatures
