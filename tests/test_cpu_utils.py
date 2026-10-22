@@ -114,3 +114,15 @@ def test_config_update_in_place():
     other = Config(brain_dtype='float16')
     cfg.update_in_place(other)
     assert cfg.brain_dtype == 'float16' and cfg.size == other.size
+
+
+def test_old_checkpoint_config_gets_flat_cover_and_original_defaults():
+    """A Config pickled before newer options existed falls back to the class defaults when loaded,
+    which must keep the original behaviour (the presets opt in to the new behaviour instead)."""
+    import pickle
+    cfg = Config(food_cover_scaled=1, kill_reproduce_every=4, brain_dtype='float16', food_grow_every=4)
+    for name in ('food_cover_scaled', 'kill_reproduce_every', 'brain_dtype', 'food_grow_every'):
+        del cfg.__dict__[name]    # as if pickled by an older version of the code
+    old = pickle.loads(pickle.dumps(cfg))
+    assert (old.food_cover_scaled, old.kill_reproduce_every, old.brain_dtype, old.food_grow_every) == \
+        (0, 1, 'float32', 1)

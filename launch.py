@@ -30,20 +30,23 @@ if __name__ == '__main__':
     benchmark_opts.add_argument('--steps', type=int, default=100, help='Steps to run simulation for during benchmarking')
     args = parser.parse_args()
 
+    # food_cover_scaled=1 is set per preset rather than as the Config default, so that loading an
+    # older checkpoint (whose pickled Config lacks the field) keeps that game's original flat cost
     match args.config:
         case 'small':
             cfg = config.Config(start_creatures=3, max_creatures=100, size=5, food_cover_decr=0.0,
-                    init_size_range=(0.2, 0.2), num_rays=3, immortal=True, init_food_scale=15.)
+                    init_size_range=(0.2, 0.2), num_rays=3, immortal=True, init_food_scale=15.,
+                    food_cover_scaled=1)
 
         case 'medium':
-            cfg = config.Config()
+            cfg = config.Config(food_cover_scaled=1)
 
         case 'large':
             cfg = config.Config(start_creatures=8192, max_creatures=131072, size=5000, food_cover_decr=0.2,
                                 cell_size=16.0, max_per_cell=40,
                                 food_sight=4, size_range=(0.1, 5.0),
                                 brain_size=(50, 40), kill_reproduce_every=4, brain_dtype='float16',
-                                food_grow_every=4)
+                                food_grow_every=4, food_cover_scaled=1)
 
     if args.max_creatures is not None:
         cfg.max_creatures = args.max_creatures
