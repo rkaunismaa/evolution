@@ -132,8 +132,10 @@ def test_food_capacity_map_shape_range_and_smoothness(make_world):
     assert cap.shape == world.food_grid.shape and cap.is_contiguous()
     p = world.creatures.pad
     central = cap[p:-p, p:-p]
-    assert central.min() >= 0.5 - 1e-5 and central.max() <= 1.5 + 1e-5
-    assert central.max() - central.min() > 0.9      # spans nearly the whole [0.5, 1.5] range
+    assert central.min() >= 0.0
+    assert abs(central.std().item() - 0.375 * 0.5) < 0.01       # contrast set by the variation
+    inside = ((central >= 0.5) & (central <= 1.5)).float().mean().item()
+    assert inside > 0.97                                        # nearly all land within 1 +- variation
     assert abs(central.mean().item() - 1.0) < 1e-3  # waves average out exactly over the world
     assert cap[:p].eq(1).all()                      # padding is neutral
     # smooth: neighbouring cells differ far less than the overall spread

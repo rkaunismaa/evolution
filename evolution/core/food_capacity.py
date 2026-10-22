@@ -22,6 +22,7 @@ class FoodCapacityField:
     """
 
     n_modes = 24
+    STD_PER_VARIATION = 0.375   # matches the contrast of the earlier noise-based map
 
     def __init__(self, cfg: Config, pad: int, device: torch.device):
         self.cfg = cfg
@@ -44,8 +45,10 @@ class FoodCapacityField:
             self.omega = sign * (2 * math.pi / change) * (0.5 + torch.rand(self.n_modes))
         else:
             self.omega = torch.zeros(self.n_modes)
+        # scale so the waves' sum has standard deviation STD_PER_VARIATION; the multiplier
+        # 1 + variation * field then keeps ~99% of land within [1 - variation, 1 + variation]
         self.norm = 1.0
-        self.norm = self._raw(0).abs().max().item()   # so the field at time 0 spans [1-v, 1+v]
+        self.norm = self._raw(0).std().item() / self.STD_PER_VARIATION
 
         side = size + 2 * pad
         self.multiplier = torch.ones((side, side), device=device)   # padding stays at 1
