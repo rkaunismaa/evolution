@@ -84,6 +84,9 @@ void eat(int* positions, float* eat_pcts, float* pct_eaten, float* sizes, float*
 
     energies[creature] += food/age_mult - alive_cost;
     alive_costs[creature] = alive_cost;
-    atomicAdd(&food_grid_updates[cell_idx], food+food_decr);
+    // CFG_food_cover_scaled: 1 => cover cost scales with how much the creature eats (as documented in
+    // config.py and shown in the cell panel), 0 => a flat food_decr per creature (original behaviour)
+    float cover_cost = CFG_food_cover_scaled ? creature_food_decr : food_decr;
+    atomicAdd(&food_grid_updates[cell_idx], food + cover_cost);
     ages[creature] += 1;
 }

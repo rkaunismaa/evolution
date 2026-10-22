@@ -75,6 +75,9 @@ class Config:
     eat_pct_scaling: Tuple[Scaling, Scaling] = (Scaling.LOG, Scaling.LOG) # scaling for (size, eat_pct)
     food_cover_decr: float = 0.2  # if a creature occupies a cell, the food in that cell be decreased by this amount each step
     food_cover_decr_pct: float = 10. # actual_food_decr = food_cover_decr * float_cover_decr_pct * creature_eat_pct
+    # 1 = apply the scaled cover cost above (food_cover_decr * food_cover_decr_pct * eat_pct per creature);
+    # 0 = remove a flat food_cover_decr per creature in the cell (the behaviour before this option existed)
+    food_cover_scaled: int = 0
     food_cover_decr_incr_amt: float = 1.5e-5  # how much food_cover_decr increase per generation when increase is enabled
     neg_food_eat_mul: float = 0.1  # if food is negative, creature eating is scaled by this amount
     max_food: float = 15.     # maximum amount of food in a cell (decays past this value)

@@ -36,9 +36,11 @@ def _reference_eat_grow(world, grow=True, step_mult=1):
     food = torch.where(neg, torch.zeros_like(food), food)
     alive_cost = 0.01 * sizes * age_mults
     energies = energies + food / age_mults - alive_cost
-    # note: the kernel removes a flat food_cover_decr per creature (its per-creature
-    # creature_food_decr is computed but unused); the reference mirrors the kernel
-    updates = torch.zeros(W * W, device=food_grid.device).index_add_(0, cell, food + cfg.food_cover_decr)
+    if cfg.food_cover_scaled:
+        cover = cfg.food_cover_decr * eat_pct * cfg.food_cover_decr_pct
+    else:
+        cover = torch.full_like(food, cfg.food_cover_decr)
+    updates = torch.zeros(W * W, device=food_grid.device).index_add_(0, cell, food + cover)
     ages = ages + 1
 
     if not grow:
@@ -57,10 +59,11 @@ def _reference_eat_grow(world, grow=True, step_mult=1):
     return new_grid, energies, healths, ages, age_mults
 
 
+@pytest.mark.parametrize("scaled", [0, 1], ids=["flat-cover", "scaled-cover"])
 @pytest.mark.parametrize("crowded", [False, True])
-def test_eat_grow_matches_reference(make_world, crowded):
+def test_eat_grow_matches_reference(make_world, crowded, scaled):
     # crowded: many creatures on a few cells, so cells are over-claimed (pct_eaten > 1)
-    world = make_world(size=40) if crowded else make_world()
+    world = make_world(size=40, food_cover_scaled=scaled) if crowded else make_world(food_cover_scaled=scaled)
     c = world.creatures
     for _ in range(30):     # let ages, energies and food levels spread out
         world.step()
