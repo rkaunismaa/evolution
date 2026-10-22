@@ -120,3 +120,47 @@ def test_checkpoint_round_trip_quantized_is_close(make_world, tmp_path):
             step = (span / 255).clamp(min=6.1e-5)
             assert ((got.float() - d).abs() <= step + 1e-6).all(), name
     loaded.step()   # and the loaded world keeps running
+
+
+def test_food_capacity_map_off_by_default(make_world):
+    assert make_world().food_capacity is None
+
+
+def test_food_capacity_map_shape_range_and_smoothness(make_world):
+    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0)
+    cap = world.food_capacity
+    assert cap.shape == world.food_grid.shape and cap.is_contiguous()
+    assert cap.min() >= 0.5 - 1e-5 and cap.max() <= 1.5 + 1e-5
+    assert cap.max() - cap.min() > 0.5          # actually varies
+    assert abs(cap.mean().item() - 1.0) < 0.1   # centred on the uniform capacity
+    # smooth: neighbouring cells differ far less than the overall spread
+    assert (cap[1:] - cap[:-1]).abs().max() < 0.1
+
+
+def test_food_settles_near_local_capacity(make_world):
+    """With no creatures eating, food converges towards max_food * capacity in each cell."""
+    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0, food_step_size=0.02,
+                       food_cover_decr=0.0, init_food_scale=0.0)
+    c, p = world.creatures, world.creatures.pad
+    c.positions.data[:] = 1.0              # park everyone in one corner cell
+    c.eat_pcts.data[:] = 0.0               # and stop them eating
+    for _ in range(40):
+        world.state.time += 1
+        c.eat_grow(world.food_grid, world.state, world.food_capacity)
+    food = world.food_grid[p:-p, p:-p]
+    target = world.cfg.max_food * world.food_capacity[p:-p, p:-p]
+    corr = torch.corrcoef(torch.stack([food.flatten(), target.flatten()]))[0, 1]
+    assert corr > 0.99
+
+
+@pytest.mark.parametrize("quantized", [False, True])
+def test_food_capacity_map_saved_in_checkpoint(make_world, tmp_path, quantized):
+    from evolution.core.gworld import GWorld
+    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0)
+    world.step(); world.step()
+    path = tmp_path / "cap.ckpt"
+    world.write_checkpoint(str(path), quantized=quantized)
+    loaded, _ = GWorld.from_checkpoint(str(path))
+    tol = 0 if not quantized else 2.0 / 255
+    assert (loaded.food_capacity - world.food_capacity).abs().max().item() <= tol
+    loaded.step()

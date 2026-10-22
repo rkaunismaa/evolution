@@ -7,7 +7,7 @@ from tests.conftest import requires_cuda
 pytestmark = requires_cuda
 
 
-def _reference_eat_grow(world, grow=True, step_mult=1):
+def _reference_eat_grow(world, grow=True, step_mult=1, capacity=None):
     """Pure-PyTorch version of Creatures.eat_grow (kernels setup_eat_grid, eat, grow).
     grow=False applies only the eating updates; step_mult scales the growth step.
     Returns new (food_grid, energies, healths, ages, age_mults)."""
@@ -48,9 +48,10 @@ def _reference_eat_grow(world, grow=True, step_mult=1):
 
     # grow (padding untouched)
     f = food_grid.view(-1) - updates
-    growth = cfg.food_step_size * step_mult * (cfg.max_food - f)
+    cap = cfg.max_food if capacity is None else cfg.max_food * capacity.view(-1)
+    growth = cfg.food_step_size * step_mult * (cap - f)
     f = torch.where(f < 0, f + growth * cfg.food_recovery_rate,
-                    torch.where(f > cfg.max_food, f + growth * cfg.food_decay_rate,
+                    torch.where(f > cap, f + growth * cfg.food_decay_rate,
                                 f + growth * cfg.food_growth_rate))
     grown = f.view(W, W)
     p = c.pad
@@ -117,3 +118,15 @@ def test_batched_food_growth_matches_reference(make_world, crowded):
         got = (world.food_grid, c.energies.data, c.healths.data, c.ages.data, c.age_mults.data)
         for name, g, r in zip(names, got, ref):
             torch.testing.assert_close(g, r, rtol=1e-4, atol=1e-4, msg=f"{name} at time {t}")
+
+
+def test_grow_with_capacity_map_matches_reference(make_world):
+    world = make_world(food_capacity_variation=0.6, food_capacity_scale=30.0)
+    c = world.creatures
+    for _ in range(30):
+        world.step()
+    # push some cells above their local capacity so the decay branch runs too
+    world.food_grid[c.pad:-c.pad, c.pad:c.pad + 20] = 30.0
+    ref = _reference_eat_grow(world, capacity=world.food_capacity)
+    c.eat_grow(world.food_grid, world.state, world.food_capacity)
+    torch.testing.assert_close(world.food_grid, ref[0], rtol=1e-4, atol=1e-4)

@@ -81,6 +81,11 @@ class Config:
     food_cover_decr_incr_amt: float = 1.5e-5  # how much food_cover_decr increase per generation when increase is enabled
     neg_food_eat_mul: float = 0.1  # if food is negative, creature eating is scaled by this amount
     max_food: float = 15.     # maximum amount of food in a cell (decays past this value)
+    # uneven food capacity: each cell's max_food is scaled by a smooth random map ranging over about
+    # [1 - variation, 1 + variation], with rich and poor regions roughly food_capacity_scale cells wide.
+    # 0 = every cell has the same max_food
+    food_capacity_variation: float = 0.0
+    food_capacity_scale: float = 250.0
     food_decay_rate: float = 0.05 # how fast food decays (when over max_food)
     food_growth_rate: float = 10.0  # scale to apply to food growth rate
     food_recovery_rate: float = 30.0  # scale to apply to food growth rate when its negative

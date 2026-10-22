@@ -1,5 +1,6 @@
 extern "C" __global__ 
-void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, float step_size, float max_food) {
+void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, float step_size, float max_food,
+          const float* capacity_mult) {
     /* 
     Read from:
         food_grid_updates: [S, S], where the coordinate is the amount of food that has been lost to eating
@@ -12,6 +13,8 @@ void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, fl
         num_cells: number of cells in the grid. (width + 2*pad)
         pad: padding of the grid.
         step_size: increment to scale food growth by
+        max_food: food level that cells grow towards (and decay down to when above it)
+        capacity_mult: [S, S] per-cell multiplier on max_food, or null for a uniform max_food
 */
     // Get the index of the current thread
     int cell_x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -25,13 +28,14 @@ void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, fl
     float food = food_grid[cell_idx];
     food -= food_grid_updates[cell_idx];  // apply eating update
 
-    float growth_amt = step_size * (max_food - food);
+    float cap = capacity_mult ? max_food * capacity_mult[cell_idx] : max_food;
+    float growth_amt = step_size * (cap - food);
 
     // grow the food
     if (food < 0.0){
         food += growth_amt*CFG_food_recovery_rate;
     }
-    else if (food > max_food){
+    else if (food > cap){
         food += growth_amt*CFG_food_decay_rate;
     }
     else{

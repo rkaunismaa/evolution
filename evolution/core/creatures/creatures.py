@@ -254,7 +254,7 @@ class Creatures:
         new_creatures = self.traits.reproduce_traits(self.mutation_rates[reproducers], reproducers, num_reproducers)
         return new_creatures
 
-    def eat_grow(self, food_grid: Tensor, state: GameState):
+    def eat_grow(self, food_grid: Tensor, state: GameState, capacity_mult: Tensor | None = None):
         """Compute how much food each creature eats, by taking a fixed percentage of the available
         food in the cell it is in. If there are more creatures in a cell than the reciprocal of
         this fixed percentage (i.e. there isn't enough food to go around), then each creature
@@ -306,7 +306,8 @@ class Creatures:
                                food_grid.shape[1] // threads_per_block[1] + 1)
 
             self.kernels('grow', blocks_per_grid, threads_per_block,
-                         food_grid_updates, food_grid, food_grid.shape[0], self.pad, step_size, self.cfg.max_food)
+                         food_grid_updates, food_grid, food_grid.shape[0], self.pad, step_size, self.cfg.max_food,
+                         capacity_mult if capacity_mult is not None else 0)   # 0 = null pointer
         else:
             # no growth this step: just apply the eating updates, which are only at creatures' cells
             # (duplicate indices all write the same value, so cells with several creatures are fine)
