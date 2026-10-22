@@ -13,6 +13,7 @@ from evolution.visual.interactive.camera import Camera
 
 from .config import Config
 from .creatures.creatures import Creatures
+from .food_capacity import FoodCapacityField
 
 class GWorld():
     """The main class that holds the state the world, including the food grid, the creatures,
@@ -25,7 +26,10 @@ class GWorld():
         self.food_grid = torch.rand((cfg.size, cfg.size), device=self.device) * cfg.init_food_scale
         # pad with zeros on all sides
         self.food_grid = F.pad(self.food_grid, (cfg.food_sight,)*4, mode='constant', value=0)
-        self.food_capacity = self.make_food_capacity()   # per-cell max_food multiplier, or None
+        # per-cell max_food multiplier (rich and poor land), or None for uniform capacity
+        self.food_capacity_field = (FoodCapacityField(cfg, cfg.food_sight, self.device)
+                                    if getattr(cfg, 'food_capacity_variation', 0.0) > 0 else None)
+        self.food_capacity = self.food_capacity_field.multiplier if self.food_capacity_field else None
         self.kernels = cu_algorithms.CUDAKernelManager(cfg)
         self.creatures: Creatures = Creatures(cfg, self.kernels, self.device)
         self.n_maxxed = 0
@@ -168,21 +172,6 @@ class GWorld():
         """Grow food_grid and give creatures energy for being in a square"""
         self.creatures.eat_grow(self.food_grid, self.state, self.food_capacity)
 
-    def make_food_capacity(self) -> Optional[Tensor]:
-        """Smooth random per-cell multiplier on max_food (same shape as the padded food grid), or None
-        when cfg.food_capacity_variation is 0. Made by upsampling a coarse grid of uniform noise,
-        then rescaling so the multiplier spans [1 - variation, 1 + variation] (clamped at 0)."""
-        variation = getattr(self.cfg, 'food_capacity_variation', 0.0)
-        if variation <= 0:
-            return None
-        side = self.food_grid.shape[0]
-        coarse = max(2, int(np.ceil(side / self.cfg.food_capacity_scale)) + 1)
-        noise = torch.rand((1, 1, coarse, coarse), device=self.device)
-        smooth = F.interpolate(noise, size=(side, side), mode='bicubic', align_corners=True)[0, 0]
-        smooth = smooth - smooth.mean()
-        smooth = smooth / smooth.abs().max().clamp(min=1e-6)
-        return (1.0 + variation * smooth).clamp(min=0.0).contiguous()
-
     @property
     def central_food_grid(self):
         """Return the central part of the food grid, excluding the padding."""
@@ -232,6 +221,10 @@ class GWorld():
         # we do these steps in this (seemingly backwards) order, because we want vision and brain
         # information to be up to date when we visualize, which happens after we exit from here
 
+        field = self.food_capacity_field
+        if field is not None and field.moving and self.state.time % self.cfg.food_capacity_update_every == 0:
+            field.update(self.state.time)   # the landscape drifts: refresh rich/poor land in place
+
         # move creatures, update health and energy, reproduce, eat, grow food
         self.update_creatures()
 
@@ -272,11 +265,9 @@ class GWorld():
 
         seed = self.state.time
         fgrid = quantize(self.food_grid, map_location=torch.device('cpu')) if quantized else self.food_grid
-        capacity = self.food_capacity
-        if capacity is not None and quantized:
-            capacity = quantize(capacity, map_location=torch.device('cpu'))
+        field = self.food_capacity_field
         torch.save({'food_grid': fgrid,
-                    'food_capacity': capacity,
+                    'food_capacity_field': field.state_dict() if field is not None else None,
                     'creatures': self.creatures.traits.state_dict(quantized),
                     'cfg': self.cfg,
                     'time': self.state.time,
@@ -311,10 +302,15 @@ class GWorld():
             fgrid = fgrid.dequantize(map_location=instance.device)
         instance.food_grid = fgrid
 
-        capacity = checkpoint.get('food_capacity')   # absent in checkpoints from before the option
-        if isinstance(capacity, QuantizedData):
-            capacity = capacity.dequantize(map_location=instance.device)
-        instance.food_capacity = capacity.to(instance.device).contiguous() if capacity is not None else None
+        field_state = checkpoint.get('food_capacity_field')   # the field is a function of time
+        if field_state is not None:
+            instance.food_capacity_field.load_state_dict(field_state, checkpoint.get('time', 0))
+        elif checkpoint.get('food_capacity') is not None:   # older format: a saved, static map
+            capacity = checkpoint['food_capacity']
+            if isinstance(capacity, QuantizedData):
+                capacity = capacity.dequantize(map_location=instance.device)
+            instance.food_capacity_field.multiplier.copy_(capacity)
+            instance.food_capacity_field.omega.zero_()
 
         instance.creatures.traits.load_state_dict(checkpoint['creatures'], instance.device)
         instance.state.time = checkpoint.get('time', 0)

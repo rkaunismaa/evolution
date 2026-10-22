@@ -130,11 +130,18 @@ def test_food_capacity_map_shape_range_and_smoothness(make_world):
     world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0)
     cap = world.food_capacity
     assert cap.shape == world.food_grid.shape and cap.is_contiguous()
-    assert cap.min() >= 0.5 - 1e-5 and cap.max() <= 1.5 + 1e-5
-    assert cap.max() - cap.min() > 0.5          # actually varies
-    assert abs(cap.mean().item() - 1.0) < 0.1   # centred on the uniform capacity
+    p = world.creatures.pad
+    central = cap[p:-p, p:-p]
+    assert central.min() >= 0.5 - 1e-5 and central.max() <= 1.5 + 1e-5
+    assert central.max() - central.min() > 0.9      # spans nearly the whole [0.5, 1.5] range
+    assert abs(central.mean().item() - 1.0) < 1e-3  # waves average out exactly over the world
+    assert cap[:p].eq(1).all()                      # padding is neutral
     # smooth: neighbouring cells differ far less than the overall spread
-    assert (cap[1:] - cap[:-1]).abs().max() < 0.1
+    spread = (central.max() - central.min()).item()
+    assert (central[1:] - central[:-1]).abs().max() < spread / 4
+    assert (central[:, 1:] - central[:, :-1]).abs().max() < spread / 4
+    # tiles across the world's edges: the wrap-around step is as smooth as any other
+    assert (central[0] - central[-1]).abs().max() < spread / 4
 
 
 def test_food_settles_near_local_capacity(make_world):
@@ -153,14 +160,49 @@ def test_food_settles_near_local_capacity(make_world):
     assert corr > 0.99
 
 
-@pytest.mark.parametrize("quantized", [False, True])
-def test_food_capacity_map_saved_in_checkpoint(make_world, tmp_path, quantized):
+@pytest.mark.parametrize("change_steps", [0, 500], ids=["static", "drifting"])
+def test_food_capacity_field_saved_in_checkpoint(make_world, tmp_path, change_steps):
     from evolution.core.gworld import GWorld
-    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0)
-    world.step(); world.step()
+    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0,
+                       food_capacity_change_steps=change_steps, food_capacity_update_every=10)
+    for _ in range(25):
+        world.step()
     path = tmp_path / "cap.ckpt"
-    world.write_checkpoint(str(path), quantized=quantized)
+    world.write_checkpoint(str(path))
     loaded, _ = GWorld.from_checkpoint(str(path))
-    tol = 0 if not quantized else 2.0 / 255
-    assert (loaded.food_capacity - world.food_capacity).abs().max().item() <= tol
+    # the saved field is recomputed for the saved time: same as the running world's latest update
+    world.food_capacity_field.update(world.state.time)
+    torch.testing.assert_close(loaded.food_capacity, world.food_capacity, rtol=0, atol=1e-6)
+    # and both keep evolving identically
+    loaded.food_capacity_field.update(world.state.time + 300)
+    world.food_capacity_field.update(world.state.time + 300)
+    torch.testing.assert_close(loaded.food_capacity, world.food_capacity, rtol=0, atol=1e-6)
     loaded.step()
+
+
+def test_static_field_never_changes_and_drifting_field_does(make_world):
+    static = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0)
+    drifting = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0,
+                          food_capacity_change_steps=200, food_capacity_update_every=10)
+    s0, d0 = static.food_capacity.clone(), drifting.food_capacity.clone()
+    assert not static.food_capacity_field.moving and drifting.food_capacity_field.moving
+    for _ in range(25):
+        static.step(); drifting.step()
+    assert torch.equal(static.food_capacity, s0)
+    changed = (drifting.food_capacity - d0).abs().max().item()
+    assert changed > 0.05
+    # it is the same tensor the grow kernel reads, updated in place
+    assert drifting.food_capacity.data_ptr() == drifting.food_capacity_field.multiplier.data_ptr()
+
+
+def test_drifting_field_decorrelates_over_change_steps(make_world):
+    world = make_world(food_capacity_variation=0.5, food_capacity_scale=25.0,
+                       food_capacity_change_steps=1000)
+    field, p = world.food_capacity_field, world.creatures.pad
+    def at(t):
+        field.update(t)
+        return field.multiplier[p:-p, p:-p].flatten().clone()
+    base = at(0)
+    corr = lambda t: torch.corrcoef(torch.stack([base, at(t)]))[0, 1].item()
+    assert corr(20) > 0.95       # slow: barely changes over a few dozen steps
+    assert corr(1000) < 0.5      # but is largely different after change_steps
