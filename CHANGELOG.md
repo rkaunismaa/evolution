@@ -2,12 +2,14 @@
 
 ## 2026-10-16 to 2026-10-22
 
-The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, and new games use the documented food-cover cost. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
+The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, new games use the documented food-cover cost, and the `large` preset has rich and poor regions of land. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
 
 ### Changes
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-10-22 | `c0fa69a` | `food_capacity_variation=0.5` in the `large` preset | First planned feature from the README, turned on after a comparison |
+| 2026-10-22 | `baa0cc1` | New `food_capacity_variation` / `food_capacity_scale` options give each cell its own maximum food from a smooth random map | README planned feature: uneven food to reward navigation |
 | 2026-10-22 | `d2aa419` | `food_cover_scaled=1` in the `small`, `medium` and `large` presets | New games get the intended cost and a correct cell panel; old saves keep the flat cost |
 | 2026-10-22 | `b1f818f` | New `food_cover_scaled` option applies the per-creature food-cover cost | `eat.cu` computed the documented cost but removed a flat cost instead |
 | 2026-10-21 | `b9b9fda` | New `food_grow_every` option grows food every N steps with an N× step; 4 for `large` | Food growth passed over all 25M cells every step, the second-largest GPU cost |
@@ -61,19 +63,31 @@ After these changes the GPU is busy most of each step, so removing the remaining
 
 Small creatures, which eat a small share of their cell, destroy up to 100× less food with the scaled cost, so being small is cheaper. In both modes the population then stays at the cap.
 
+### Uneven food capacity (`baa0cc1`, `c0fa69a`)
+
+With `food_capacity_variation` above 0, each cell's `max_food` is multiplied by a smooth random map spanning about [1 − variation, 1 + variation], with regions roughly `food_capacity_scale` cells wide (default 250). The map multiplies `cfg.max_food`, so the Max Food slider still works, and it is saved in checkpoints. At 0, the default, no map is allocated and the grow kernel behaves exactly as before. The `large` preset uses 0.5; the map costs about 100 MB of GPU memory and no measurable speed.
+
+| 20,000-step `large` runs, 2 seeds each, variation 0.5 | Normal brains | Movement shuffled between creatures (control) |
+| --- | --- | --- |
+| Creatures on rich land (capacity > 1.2, 15–16% of the area) | 29–33% | 37–39% |
+| Mean capacity under creatures (map mean 1.0) | 1.10–1.11 | 1.14–1.15 |
+| Mean creature size | 0.70–0.73 | 0.40–0.41 |
+
+Mean food (13.2) and creature size match uniform-capacity runs. Creatures gather on rich land, but the control shows this comes from births and survival there rather than steering: creatures whose movement is decoupled from what they see gather even more. Within 20,000 steps there is no evidence yet that creatures evolve to navigate towards rich land; with the population pinned at the `max_creatures` cap, selection may be too weak.
+
 ### Crash fix (`4e1fbc9`)
 
 When births brought the population to exactly `max_creatures`, `add_with_deaths_max_array` collected only the free slots inside and to the right of the creature block, then moved the block start to 0. If the block did not start at 0, which is normal after deaths shift it, the left-hand slots were missed, so there were fewer slots than children and writing them failed with a shape mismatch. The selected creature's index was also not shifted. Both are fixed; `test_filling_buffer_when_block_does_not_start_at_zero` reproduces the original crash.
 
 ### Tests
 
-Run with `python3 -m pytest` (38 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (44 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
-| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost); scratch buffers re-zeroed; colour mapping |
-| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips |
+| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map); scratch buffers re-zeroed; colour mapping |
+| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity map range, smoothness, convergence and saving |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
