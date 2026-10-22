@@ -8,6 +8,8 @@ The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-10-22 | `b891914` | Capacity field scaled by its spread instead of its maximum | Restores the contrast the `large` preset was tuned with (std 0.19, ~15% rich land) |
+| 2026-10-22 | `d2a5dcc` | Capacity map rebuilt as a wave field that can drift (`food_capacity_change_steps`, off by default) | README planned feature: large-scale, slow environmental change |
 | 2026-10-22 | `c0fa69a` | `food_capacity_variation=0.5` in the `large` preset | First planned feature from the README, turned on after a comparison |
 | 2026-10-22 | `baa0cc1` | New `food_capacity_variation` / `food_capacity_scale` options give each cell its own maximum food from a smooth random map | README planned feature: uneven food to reward navigation |
 | 2026-10-22 | `d2aa419` | `food_cover_scaled=1` in the `small`, `medium` and `large` presets | New games get the intended cost and a correct cell panel; old saves keep the flat cost |
@@ -75,19 +77,31 @@ With `food_capacity_variation` above 0, each cell's `max_food` is multiplied by 
 
 Mean food (13.2) and creature size match uniform-capacity runs. Creatures gather on rich land, but the control shows this comes from births and survival there rather than steering: creatures whose movement is decoupled from what they see gather even more. Within 20,000 steps there is no evidence yet that creatures evolve to navigate towards rich land; with the population pinned at the `max_creatures` cap, selection may be too weak.
 
+### Drifting land (`d2a5dcc`, `b891914`)
+
+The capacity map is now a `FoodCapacityField`: a sum of 24 plane waves with integer wavevectors, so it tiles across the world's edges and averages exactly 1. It is scaled so its standard deviation is 0.375 × `food_capacity_variation`, keeping ~99% of land within 1 ± variation. With `food_capacity_change_steps` above 0, each wave drifts at its own speed, so rich and poor regions grow, shrink, merge and split, becoming unrecognisable after about that many steps. The field is recomputed in place every `food_capacity_update_every` steps (default 50; 1.4 ms at size 5000), and checkpoints store only the wave parameters. Drift is off by default and in all presets.
+
+| 20,000-step `large` runs, 2 seeds each, variation 0.5 | Static, normal | Static, control | Drifting (10,000 steps), normal | Drifting, control |
+| --- | --- | --- | --- | --- |
+| Creatures on rich land (14–15% of area) | 25–26% | 30–32% | 13% | 12–13% |
+| Mean capacity under creatures (map mean 1.0) | 1.08–1.09 | 1.11–1.12 | 0.99 | 0.98 |
+| Mean food level (max 15) | 13.2 | 14.1 | 14.5 | 15.9 |
+
+With drifting land, populations stay put as the land moves and end up on formerly rich land, while newly rich areas go ungrazed. Normal brains do no better than the control, so creatures do not steer. In every run food is near its maximum and the population is pinned at `max_creatures`, so there is little pressure to seek food; making food rather than the cap limit the population is the likely next step.
+
 ### Crash fix (`4e1fbc9`)
 
 When births brought the population to exactly `max_creatures`, `add_with_deaths_max_array` collected only the free slots inside and to the right of the creature block, then moved the block start to 0. If the block did not start at 0, which is normal after deaths shift it, the left-hand slots were missed, so there were fewer slots than children and writing them failed with a shape mismatch. The selected creature's index was also not shifted. Both are fixed; `test_filling_buffer_when_block_does_not_start_at_zero` reproduces the original crash.
 
 ### Tests
 
-Run with `python3 -m pytest` (44 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (46 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
 | `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map); scratch buffers re-zeroed; colour mapping |
-| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity map range, smoothness, convergence and saving |
+| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
