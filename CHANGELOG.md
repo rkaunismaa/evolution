@@ -89,6 +89,25 @@ The capacity map is now a `FoodCapacityField`: a sum of 24 plane waves with inte
 
 With drifting land, populations stay put as the land moves and end up on formerly rich land, while newly rich areas go ungrazed. Normal brains do no better than the control, so creatures do not steer. In every run food is near its maximum and the population is pinned at `max_creatures`, so there is little pressure to seek food; making food rather than the cap limit the population is the likely next step.
 
+### Navigation experiments (no code changes)
+
+Measurements on the `large` preset with `food_capacity_variation=0.5`, to see whether creatures evolve to seek food. "Control" shuffles move and rotate outputs between creatures each step, so movement cannot depend on what a creature senses; "food-blind" shuffles each creature's 9×9 food view with another creature's, so food vision carries no information.
+
+- **Gathering on rich land is not steering.** With static land, creatures are about 1.7× over-represented on rich land, but the control gathers even more (about 2.1×), so the effect comes from births and survival there. With drifting land the effect disappears for both.
+- **Food is abundant in the presets.** In every default-growth run mean food sat near 13–14 of a possible 15 and the population was pinned at `max_creatures`. Even at a 262,144 cap, growth rates of 5 and 2.5 (default 10) stayed cap-limited.
+- **Scarce food (growth 1.0, cap 262,144, 60,000 steps)** limits the population for roughly the first 30,000 steps, with an early crash to about 3,000 creatures and boom-and-bust swings. Creatures then evolve smaller (mean size 0.64 → 0.49) and the population returns to the cap with mean food around 3.6.
+
+| 60,000 steps, growth 1.0, cap 262,144, seed 0 | Normal | Control (movement shuffled) | Food-blind |
+| --- | --- | --- | --- |
+| Lowest population | 3,220 | 12 | 4,441 |
+| Population at the end | 262,144 (cap) | 104,804 | 262,144 (cap) |
+| Mean food at the end (max 15) | 3.6 | 11.7 | 3.6 |
+| Mean creature size at the end | 0.49 | 0.28 | 0.48 |
+| Creatures on rich land (14.6% of area) | 20% | swings 9–29% | 20% |
+
+- **Brains matter, food vision does not.** Shuffling movement is nearly fatal, but blinding food vision changes nothing, so the useful behaviour comes from other inputs (own energy, health, size, memory, or what the rays see). Likely reasons navigation has not evolved: neighbouring cells differ little (regions are ~250 cells wide, the view is 9×9), moving costs energy, and 60,000 steps allow relatively few generations.
+- **Trade-off to consider:** with `food_sight=4` the food view is 81 of each brain's 130 inputs (about 62% of the first layer's weights). `food_sight=1` (9 inputs) would roughly halve brain memory and cut brain evaluation, the largest GPU cost, by about a third, at the price of making navigation even harder to evolve.
+
 ### Crash fix (`4e1fbc9`)
 
 When births brought the population to exactly `max_creatures`, `add_with_deaths_max_array` collected only the free slots inside and to the right of the creature block, then moved the block start to 0. If the block did not start at 0, which is normal after deaths shift it, the left-hand slots were missed, so there were fewer slots than children and writing them failed with a shape mismatch. The selected creature's index was also not shifted. Both are fixed; `test_filling_buffer_when_block_does_not_start_at_zero` reproduces the original crash.
