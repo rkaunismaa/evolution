@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-16 to 2026-10-22
+## 2026-10-16 to 2026-10-26
 
 The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, new games use the documented food-cover cost, and the `large` preset has rich and poor regions of land. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
 
@@ -127,3 +127,17 @@ Run with `python3 -m pytest` (46 tests, about 8 s on an RTX 4090; GPU tests are 
 
 - In games loaded from checkpoints made before `food_cover_scaled` existed, the cell info panel still shows the scaled cost while the kernel removes the flat one.
 - `GWorld.from_checkpoint` calls `torch.load` with `weights_only=False`, so loading a checkpoint can run arbitrary code. Only load checkpoints you trust.
+
+## Earlier history: June to November 2024
+
+The original project by JacksonKaunismaa: 147 commits from 2024-06-15 to 2024-11-01, ending at `928df79`. The project had no changelog then, so this is a summary of the commit messages, grouped by period; `git log 928df79` has the full detail.
+
+| Period | Highlights |
+| --- | --- |
+| June 2024 | Initial commit (`4273535`, 2024-06-15). CUDA ray tracer for creature vision and the food grid; vectorized creature operations; a much faster ray tracer that chunks the world into cells (`b7e4f11`); gridded attack checking, about 2× faster (`5a608b1`); a `Config` object for world parameters. |
+| July 2024 | Kernels moved to CUDA-python for OpenGL interop (`0c505c8`); a working window with CUDA-python, PyTorch and ModernGL sharing data (`90c6155`); instanced creature rendering and a camera. |
+| Early August 2024 | Click-and-drag navigation and world coordinates; ray and hitbox visualization; a camera that follows a creature; brain and "thoughts" visualization; saving the game; speed controls. |
+| Mid August 2024 | Faster reproduction and killing through batched random numbers and index-based memory rearranging (`indexed-reproduce-kill` branch, merged in `1967423`); a creature size maximum; fused CUDA kernels for rotation and for eating and food growth; an eating rework against many-creature exploits; cell selection; ageing and an age requirement for reproduction. |
+| Late August 2024 | `CreatureArray` and minimal-copy reproduction; eating scaled by creature size (`2762aa9`); health effects of eating, faster regrowth of negative food, attacks scaled by distance; publisher-subscriber updates for visuals; an old-age penalty and quantized saving for large games (`cc61467`); a GUI with imgui and glfw, with game, creature and cell panels; size-dependent ageing speed. |
+| September 2024 | `imgui_bundle` and implot; generic `CreatureTraits` that can depend on other traits (`471f670`); hyperparameter search for algorithm parameters; more brain inputs (head direction, age, colour, size) and ray lengths scaled by size (`e2d2a0c`); total-energy plot and scalar trackers saved in checkpoints; pylint-driven refactors; scalar colours mapped to RGB in a CUDA kernel; PyTorch and nsys profiling (`fa53620`); population-by-colour histogram plot (`bba3cb3`); command-line options for `launch.py`. |
+| October to November 2024 | README and docstrings; config refactor; `Creatures` no longer subclasses `CreatureArray` (`6ca1ea3`); creature status panel fix (`428b1ec`, 2024-10-09); GPLv3 license added (`928df79`, 2024-11-01). |
