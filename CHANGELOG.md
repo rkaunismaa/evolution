@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-16 to 2026-10-26
+## 2026-10-16 to 2026-10-27
 
 The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, new games use the documented food-cover cost, and the `large` preset has rich and poor regions of land. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
 
@@ -8,6 +8,7 @@ The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-10-27 | `773dcc6` | One movable, resizable Plots window; new population, mean food, mean size and age, and births/deaths plots | README planned features: a plot manager and more plots |
 | 2026-10-22 | `b891914` | Capacity field scaled by its spread instead of its maximum | Restores the contrast the `large` preset was tuned with (std 0.19, ~15% rich land) |
 | 2026-10-22 | `d2a5dcc` | Capacity map rebuilt as a wave field that can drift (`food_capacity_change_steps`, off by default) | README planned feature: large-scale, slow environmental change |
 | 2026-10-22 | `c0fa69a` | `food_capacity_variation=0.5` in the `large` preset | First planned feature from the README, turned on after a comparison |
@@ -89,6 +90,21 @@ The capacity map is now a `FoodCapacityField`: a sum of 24 plane waves with inte
 
 With drifting land, populations stay put as the land moves and end up on formerly rich land, while newly rich areas go ungrazed. Normal brains do no better than the control, so creatures do not steer. In every run food is near its maximum and the population is pinned at `max_creatures`, so there is little pressure to seek food; making food rather than the cap limit the population is the likely next step.
 
+### Plots window (`773dcc6`)
+
+The two fixed-position plot windows are replaced by one movable, resizable **Plots** window. Plots stack under collapsible headers, stretch to the window's width and share its height, and the **Show** menu picks which appear. ImGui remembers the window's position and size in `imgui.ini`; without a saved layout it starts at the bottom right.
+
+| Plot | Shows | Open at start |
+| --- | --- | --- |
+| Population | Creature count, with the `max_creatures` cap marked | Yes |
+| Energy over time | log10 of total energy (unchanged) | Yes |
+| Population by Color | Stacked population by colour (unchanged) | No |
+| Mean food level | Average food per cell, with `max_food` marked | No |
+| Mean size and age | Average size, and average age on a second axis | No |
+| Births and deaths | Births and deaths per step | No |
+
+Each new plot has a tracker saved in checkpoints. Births and deaths are counted on the CPU from values the simulation already has, and the new trackers cost no measurable speed. Which plots are shown is not saved between sessions.
+
 ### Navigation experiments (no code changes)
 
 Measurements on the `large` preset with `food_capacity_variation=0.5`, to see whether creatures evolve to seek food. "Control" shuffles move and rotate outputs between creatures each step, so movement cannot depend on what a creature senses; "food-blind" shuffles each creature's 9×9 food view with another creature's, so food vision carries no information.
@@ -114,13 +130,13 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (46 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (48 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
 | `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map); scratch buffers re-zeroed; colour mapping |
-| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving |
+| `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
