@@ -18,6 +18,8 @@ if __name__ == '__main__':
                         help='Choose a predefined configuration')
     parser.add_argument('--load_path', type=str, default='game.ckpt',
                         help='Load path for simulation state (ignored if --style is set)')
+    parser.add_argument('--run', action='store_true',
+                        help='Start the simulation running instead of paused (space toggles pause)')
     parser.add_argument('--max_creatures', type=int, default=None,
                         help='Override max_creatures from the chosen config (GPU memory scales linearly with it)')
 
@@ -57,7 +59,7 @@ if __name__ == '__main__':
 
     match args.style:
         case None:
-            main(cfg, args.load_path)  # Run simulation with visualization window
+            main(cfg, args.load_path, start_paused=not args.run)  # Run simulation with visualization window
 
         # Run simulation for benchmarking/debugging/testing/hyperparameter tuning
         case 'nsys':

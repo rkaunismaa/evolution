@@ -100,7 +100,7 @@ class Game:
         # self.controller.tick()
 
 
-def main(cfg, load_path=None):
+def main(cfg, load_path=None, start_paused=True):
     settings.WINDOW['class'] = 'moderngl_window.context.glfw.Window'
     settings.WINDOW['gl_version'] = (4, 5)
     settings.WINDOW['title'] = 'Evolution'
@@ -113,7 +113,7 @@ def main(cfg, load_path=None):
     window = mglw.create_window_from_settings()
 
     game = Game(window, cfg, load_path=load_path)
-    game.state.game_paused = True
+    game.state.game_paused = start_paused   # by default wait for space before running
     # we do one initial step to force compute_decisions to be called (so visualizers can be populated)
     game.world.step()
 

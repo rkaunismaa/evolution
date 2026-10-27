@@ -83,6 +83,8 @@ Launch a simulation:
 python3 ./launch.py
 ```
 
+The game starts paused; press space to run it, or pass `--run` to start it running.
+
 Simulation parameters can be modified by opening launch.py, and changing the `evolution.core.config.Config` object. Documentation for all supported parameters are outlined in `evolution/core/config.py`.
 
 To do nsys-style benchmarking, use the following command:
