@@ -34,6 +34,11 @@ class GameState:
         self.trackers: Dict[str, MetricTracker] = {}
         self.energy_tracker = MetricTracker(self, world.log_total_energy, 25)
         self.histogram_tracker = MetricTracker(self, world.creature_histogram, 100, n_bins=255)
+        self.population_tracker = MetricTracker(self, lambda: float(world.population), 25)
+        self.food_tracker = MetricTracker(self, world.mean_food, 25)
+        self.size_tracker = MetricTracker(self, world.mean_size, 25)
+        self.age_tracker = MetricTracker(self, world.mean_age, 25)
+        self.birth_death_tracker = MetricTracker(self, world.birth_death_rates, 100)
 
     def __setattr__(self, name, value):
         if isinstance(value, MetricTracker):

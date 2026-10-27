@@ -112,6 +112,26 @@ class GWorld():
         creatures and the energy of the positive areas of the food grid."""
         return float(np.log10(F.relu(self.food_grid).sum().item() + self.creatures.total_energy()))
 
+    def mean_food(self) -> float:
+        """Mean food level over the world (excluding padding)."""
+        return self.central_food_grid.mean().item()
+
+    def mean_size(self) -> float:
+        return self.creatures.sizes.data.mean().item()
+
+    def mean_age(self) -> float:
+        return self.creatures.ages.data.mean().item()
+
+    def birth_death_rates(self) -> np.ndarray:
+        """[births, deaths] per step since the previous call (both 0 on the first call)."""
+        c, now = self.creatures, self.state.time
+        last = getattr(self, '_last_birth_death', None)
+        self._last_birth_death = (now, c.n_births, c.n_deaths)
+        if last is None or now <= last[0]:
+            return np.zeros(2)
+        steps = now - last[0]
+        return np.array([(c.n_births - last[1]) / steps, (c.n_deaths - last[2]) / steps])
+
     def creature_histogram(self, n_bins: int = 255) -> np.ndarray:
         """Return a histogram of the energy of all creatures."""
         return self.creatures.histogram(n_bins)

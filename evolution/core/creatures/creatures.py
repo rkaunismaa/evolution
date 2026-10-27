@@ -41,6 +41,8 @@ class Creatures:
                                      for j in range(-self.pad, self.pad+1)], device=self.device).unsqueeze(0)
         self.activations = []
         self._eat_scratch: Tuple[Tensor, Tensor] | None = None  # (pct_eaten, food_grid_updates), see eat_grow
+        self.n_births = 0   # running totals since the world was created/loaded, for the GUI plots
+        self.n_deaths = 0
         self.traits = CreatureArray(cfg, device)
         self.generate_from_cfg()
 
@@ -174,6 +176,8 @@ class Creatures:
         dead, num_dead, dead_idxs = self._kill_dead(central_food_grid)  # determine who is dead
         alive = ~dead  # type: ignore
         new_creatures = self._reproduce(alive, num_dead)  # determine who is reproducing
+        self.n_deaths += num_dead
+        self.n_births += new_creatures.population if new_creatures is not None else 0
         if new_creatures or num_dead > 0:   # rearrange memory and update current data
             self.traits.add_with_deaths(dead_idxs, alive, num_dead, new_creatures, state)
 

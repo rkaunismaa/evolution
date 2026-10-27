@@ -1,4 +1,5 @@
 """Whole-simulation checks: invariants over many steps, config options, checkpoint round trips."""
+import numpy as np
 import pytest
 import torch
 
@@ -208,3 +209,38 @@ def test_drifting_field_decorrelates_over_change_steps(make_world):
     corr = lambda t: torch.corrcoef(torch.stack([base, at(t)]))[0, 1].item()
     assert corr(20) > 0.95       # slow: barely changes over a few dozen steps
     assert corr(1000) < 0.5      # but is largely different after change_steps
+
+
+def test_plot_trackers_record_metrics(make_world):
+    world = make_world(start_creatures=1024)
+    s, c = world.state, world.creatures
+    for step in range(200):
+        if step == 20:           # make everyone mature and well fed so births happen early
+            c.ages.data[:] = 1000.
+            c.energies.data[:] = 1000.
+        world.step()
+    assert c.n_births > 0 and c.n_deaths > 0
+    for name in ('population_tracker', 'food_tracker', 'size_tracker', 'age_tracker', 'birth_death_tracker'):
+        tracker = getattr(s, name)
+        assert tracker.length > 0, name
+        assert np.isfinite(tracker.values).all(), name
+    assert s.population_tracker.values[-1] == world.population
+    assert abs(s.food_tracker.values[-1] - world.central_food_grid.mean().item()) < 1.0
+    assert s.birth_death_tracker.values.shape[0] == 2           # births row, deaths row
+    assert (s.birth_death_tracker.values >= 0).all()
+
+
+def test_birth_death_rates_are_per_step_since_last_call(make_world):
+    world = make_world(start_creatures=1024)
+    # the tracker also calls birth_death_rates (it keeps the baseline), so take it out of the loop
+    world.state.game_step_publisher.unsubscribe(world.state.birth_death_tracker)
+    for _ in range(50):
+        world.step()
+    world.birth_death_rates()                 # set the baseline
+    c = world.creatures
+    b0, d0, t0 = c.n_births, c.n_deaths, world.state.time
+    for _ in range(40):
+        world.step()
+    rates = world.birth_death_rates()
+    steps = world.state.time - t0
+    np.testing.assert_allclose(rates, [(c.n_births - b0) / steps, (c.n_deaths - d0) / steps])
