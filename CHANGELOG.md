@@ -8,6 +8,7 @@ The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-10-27 | `5f3230f` | `--run` flag starts the game running instead of paused | The game always starts paused (space toggles it) |
 | 2026-10-27 | `773dcc6` | One movable, resizable Plots window; new population, mean food, mean size and age, and births/deaths plots | README planned features: a plot manager and more plots |
 | 2026-10-22 | `b891914` | Capacity field scaled by its spread instead of its maximum | Restores the contrast the `large` preset was tuned with (std 0.19, ~15% rich land) |
 | 2026-10-22 | `d2a5dcc` | Capacity map rebuilt as a wave field that can drift (`food_capacity_change_steps`, off by default) | README planned feature: large-scale, slow environmental change |
