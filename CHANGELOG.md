@@ -4,8 +4,11 @@
 
 The `large` preset now gives creatures a 5×5 food view instead of 9×9 (`food_sight` 4 → 2), because the navigation experiments showed they were not using it. At 131,072 creatures this lowers peak GPU memory from 3.09 to 2.27 GiB and step time from 5.05 to 3.82 ms on an RTX 4090. Saved games keep the `food_sight` they were made with, so the saving applies only to new games.
 
+The cell info panel now shows the right food-cover cost in games saved before `food_cover_scaled` existed.
+
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `d402813` | Cell panel shows the flat food-cover cost in older games; new test checks the panel against the eat kernel | The panel always showed the scaled cost, so its cover, eaten and growth amounts were wrong for those games |
 | 2026-11-03 | `9e91182` | `food_sight=2` in the `large` preset; first brain layer 130 → 74 inputs | Blinding food vision changed nothing over 60,000 steps, and the view was 62% of the first layer's weights |
 
 ## 2026-10-16 to 2026-10-27
@@ -139,7 +142,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (48 tests, about 8 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (50 tests, about 12 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
@@ -150,7 +153,6 @@ Run with `python3 -m pytest` (48 tests, about 8 s on an RTX 4090; GPU tests are 
 
 ### Known issues
 
-- In games loaded from checkpoints made before `food_cover_scaled` existed, the cell info panel still shows the scaled cost while the kernel removes the flat one.
 - `GWorld.from_checkpoint` calls `torch.load` with `weights_only=False`, so loading a checkpoint can run arbitrary code. Only load checkpoints you trust.
 
 ## Earlier history: June to November 2024
