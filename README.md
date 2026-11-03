@@ -112,12 +112,14 @@ Tests that need a GPU are skipped when no CUDA device is available. They cover c
 
 # Planned Features
  - RL to allow creatures to learn much quicker.
- - Non-uniform growth of food grid to incentivize more sophisticated navigation.
- - Large-scale, slow moving environmental changes
- - Increase the number of plots, with potential to define custom plots / tracking objectives on the fly.
- - Plot manager to enable better GUI resizing, especially to adjust for different monitor resolutions.
- - Sexual reproduction
- - Unique food sources based on creature species to allow different niches to co-exist.
+ - ~~Non-uniform growth of food grid to incentivize more sophisticated navigation.~~ Built: `food_capacity_variation` (on in the `large` preset).
+ - ~~Large-scale, slow moving environmental changes~~ Built: `food_capacity_change_steps` (off by default).
+ - ~~Increase the number of plots~~ Built: population, mean food, mean size and age, births and deaths. Custom plots defined on the fly are not built.
+ - ~~Plot manager to enable better GUI resizing, especially to adjust for different monitor resolutions.~~ Built: one movable, resizable Plots window with a Show menu.
+ - ~~Sexual reproduction~~ Built: `sexual_reproduction`, or `--sexual` (off by default).
+ - ~~Unique food sources based on creature species to allow different niches to co-exist.~~ Built: `food_types`, or `--food_types` (off by default).
+
+See `CHANGELOG.md` for how each was built and tested.
 
 ## Implementation Effort
 
