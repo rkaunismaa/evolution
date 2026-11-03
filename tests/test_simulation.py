@@ -158,7 +158,7 @@ def test_food_settles_near_local_capacity(make_world):
         world.state.time += 1
         c.eat_grow(world.food_grid, world.state, world.food_capacity)
     food = world.food_grid[:, p:-p, p:-p]
-    target = world.cfg.max_food * world.food_capacity[:, p:-p, p:-p]
+    target = world.cfg.max_food_per_type() * world.food_capacity[:, p:-p, p:-p]
     corr = torch.corrcoef(torch.stack([food.flatten(), target.flatten()]))[0, 1]
     assert corr > 0.99
 
@@ -270,3 +270,15 @@ def test_cell_panel_cover_cost_matches_eat_kernel(make_world, scaled):
         expected = cfg.food_cover_decr * in_cell.sum().item()
     assert panel.cover_cost == pytest.approx(expected, rel=1e-4)
     assert panel.eaten_amt >= -1e-6
+
+
+def test_mass_extinction_is_reported_not_a_crash(make_world):
+    """When every creature dies in one step, step() returns False (the block-moving code used to
+    slice csum[:-0], an empty tensor, and crash)."""
+    world = make_world()
+    for _ in range(3):
+        world.step()
+    world.creatures.energies.data[:] = -1.0
+    world.state.time = 4 * (world.state.time // 4 + 1) - 1   # next update kills (every step by default)
+    assert world.step() is False
+    assert world.population == 0

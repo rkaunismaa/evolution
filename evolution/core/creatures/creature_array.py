@@ -293,7 +293,7 @@ class CreatureArray:
         # count the number of alive creatures in each window of size n_after (sliding-window sum via
         # cumsum; alive is 0/1 so the float32 sums are exact)
         csum = torch.nn.functional.pad(self.alive[sl].cumsum(0), (1, 0))
-        windows = csum[n_after:] - csum[:-n_after]
+        windows = csum[n_after:] - csum[:csum.shape[0] - n_after]   # not [:-n_after]: n_after can be 0
         best_start = windows.argmax().item() + self.start_idx
         # find the gaps in the best window identified that have to be filled by something
         missing = (1-(self.alive[best_start:best_start+n_after])).nonzero().squeeze(1) + best_start
