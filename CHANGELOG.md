@@ -14,6 +14,7 @@ Sexual reproduction is built and off by default (`sexual_reproduction`, or `--se
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `415d8cf` | Sexual reproduction: children inherit mutation rates whole from the paying parent | Mixed mutation rates rose ~9× and nearly tripled the death rate |
 | 2026-11-03 | `6156b8b` | New `sexual_reproduction` option and `--sexual` flag: mates by area and colour, two children per pair, whole-neuron crossover | README planned feature: sexual reproduction |
 | 2026-11-03 | `709ef93` | New `food_types_share` option, on by default: each type grows towards `max_food / food_types` | Without it, extra types added food and the species barely competed (see the comparison below) |
 | 2026-11-03 | `f4f69b7` | Fix crash when every creature dies in one step; `step()` reports the extinction | The block-moving code sliced `csum[:-0]`, an empty tensor; the original `conv1d` failed too |
@@ -166,23 +167,39 @@ With `sexual_reproduction=1`, creatures that are ready to reproduce (mature, wit
 
 1. **Finding mates:** candidates are sorted by which `mate_range`-wide square of the world they are in (default 50), then by colour. Each one pairs with the next in that order if both are in the same square and their colours differ by at most `mate_color_range` (default 20). Every creature mates at most once per round, and the code is plain PyTorch with no new kernel.
 2. **Children:** each pair has two. Each parent pays for one, as in asexual reproduction, and that child starts near it. If there is room for fewer children, a random subset of pairs breeds.
-3. **Crossover:** a child's brain takes each neuron, meaning its incoming weights and its bias, whole from one parent; averaging weights tends to produce broken brains. Other inherited traits mix per element (whole rays, single values for size and colour), and then mutate with the paying parent's mutation rates.
+3. **Crossover:** a child's brain takes each neuron, meaning its incoming weights and its bias, whole from one parent; averaging weights tends to produce broken brains. Other inherited traits mix per element (whole rays, single values for size and colour), and then mutate. Mutation rates are the exception: they come whole from the paying parent (`415d8cf`, see below).
 4. **No mate:** the creature keeps its energy and tries again next round.
 
 The asexual path is unchanged, and older saves keep reproducing asexually.
 
-Test runs on the `large` preset, 30,000 steps, seed 0:
+Test runs on the `large` preset, 30,000 steps, seed 0. The mate-range columns were measured before the mutation-rate fix; the last column is the current code:
 
-| | Asexual | Mate range 20 | Mate range 50 (default) | Mate range 100 |
-| --- | --- | --- | --- | --- |
-| Population at step 5,000 | 131,072 (cap) | 21,667 | 54,983 | 131,072 (cap) |
-| At the cap from | by step 5,000 | step 10,000–15,000 | step 5,000–10,000 | by step 5,000 |
-| Births by step 30,000 | 1.53 M | 4.14 M | 4.66 M | 3.75 M |
-| Mean creature size at the end | 0.72 | 0.71 | 0.84 | 0.88 |
+| | Asexual | Mate range 20 | Mate range 50 | Mate range 100 | Mate range 50, current code |
+| --- | --- | --- | --- | --- | --- |
+| Population at step 5,000 | 131,072 (cap) | 21,667 | 54,983 | 131,072 (cap) | 104,488 |
+| At the cap from | by step 5,000 | step 10,000–15,000 | step 5,000–10,000 | by step 5,000 | step 5,000–10,000 |
+| Births by step 30,000 | 1.53 M | 4.14 M | 4.66 M | 3.75 M | 2.08 M |
+| Mean creature size at the end | 0.72 | 0.71 | 0.84 | 0.88 | 0.63 |
 
 - **Early on, finding a mate is the bottleneck.** While the population is small, ready creatures are spread thin. With range 20, about 1,600 creatures were ready per round at step 10,000, but only about 240 pairs formed.
-- **At the cap, births are 2.5–3 times the asexual rate.** Births only replace deaths there, so creatures die younger. The cause has not been measured yet; weaker crossover children are one possibility.
-- **Creatures evolve larger** with ranges 50 and 100.
+
+**Why creatures died young, and the fix (`415d8cf`).** In the first version, births at the cap were 2.5–3 times the asexual rate, so creatures died that much more often. To find out why, each part of reproduction was switched off in turn. These are deaths over steps 15,000–20,000 on the `large` preset:
+
+| Children mix... | Deaths per step | Mean age at death | Killed by attacks | Died before maturity | Median mutation rate |
+| --- | --- | --- | --- | --- | --- |
+| Nothing: asexual | 47.6 | 2,777 | 6.8% | 3.5% | 0.038 |
+| Nothing, but sexual pairing and two children per pair | 51.1 | 2,539 | 4.4% | 3.3% | |
+| Brain neurons only | 56.1 | 2,310 | 5.9% | 5.0% | |
+| Sizes only | 50.7 | 2,565 | 4.2% | 3.3% | |
+| Colours only | 50.7 | 2,562 | 4.3% | 3.3% | |
+| Rays only | 51.7 | 2,507 | 4.9% | 3.5% | |
+| Mutation rates only | 98.3 | 1,331 | 41.6% | 19.1% | |
+| Everything (first version) | 136.7 | 945 | 53.3% | 25.3% | 0.350 |
+| Everything except mutation rates (current) | 55.8 | 2,323 | 5.4% | 4.5% | 0.030 |
+
+- **Mixing mutation rates let them run away.** In an asexual lineage, a low mutation rate stays tied to the good genes it protects, so selection holds rates down. Crossover breaks that link, and the median rate rose about 9 times. Heavily mutated children could not steer, ran into others and were killed in attacks.
+- **Brain crossover by neuron is nearly harmless**, as is mixing the other traits.
+- Children now take their mutation rates whole from the paying parent.
 
 ### Navigation experiments (no code changes)
 
