@@ -203,6 +203,22 @@ Test runs on the `large` preset, 30,000 steps, seed 0. The mate-range columns we
 - **Brain crossover by neuron is nearly harmless**, as is mixing the other traits.
 - Children now take their mutation rates whole from the paying parent.
 
+### Both together: three foods and sexual reproduction (60,000 steps)
+
+`large` preset with `food_types=3` and `sexual_reproduction=1`, seed 0, after `d379278`:
+
+| Step | Population | Creatures per type | Mean food per type (max 5) | Lone births | Median mutation rate |
+| --- | --- | --- | --- | --- | --- |
+| 5,000 | 23,164 | 9,604 / 7,197 / 6,363 | 5.2 / 5.2 / 5.2 | 33% | 0.033 |
+| 10,000 | 131,072 (cap) | 56,955 / 41,537 / 32,580 | 5.3 / 5.3 / 5.4 | 10% | 0.028 |
+| 30,000 | 131,072 | 60,997 / 34,052 / 36,023 | 4.9 / 5.2 / 5.3 | 0.2% | 0.021 |
+| 60,000 | 131,072 | 58,323 / 26,518 / 46,231 | 4.8 / 5.2 / 5.1 | 0.2% | 0.015 |
+
+- **Stable:** at the cap from step 10,000, all three species alive throughout, and breeding almost entirely sexual once the population is dense.
+- **Mutation rates keep falling** (0.025 at the start, 0.015 at step 60,000), so selection holds them down now that they are not mixed.
+- **Food is close to its maximum**, so at the default growth rate the cap, not food, limits the population, and the species compete only weakly.
+- **Cost:** 4.93 ms per step at the cap, against 3.85 ms for the `large` preset with one food and asexual reproduction.
+
 ### Navigation experiments (no code changes)
 
 Measurements on the `large` preset with `food_capacity_variation=0.5`, to see whether creatures evolve to seek food. "Control" shuffles move and rotate outputs between creatures each step, so movement cannot depend on what a creature senses; "food-blind" shuffles each creature's 9×9 food view with another creature's, so food vision carries no information.
