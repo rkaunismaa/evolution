@@ -1,3 +1,4 @@
+import torch
 from typing import TYPE_CHECKING
 from torch import Tensor
 from torch.types import Number
@@ -128,7 +129,9 @@ class CreatureState:
             self.eat_pct = self.world.creatures.eat_pcts[self._selected_creature].item()
             self.food_eaten = self.post_eat_energy - self.pre_eat_energy - self.alive_cost
             self.food_dmg_taken = self.pre_eat_health - self.post_eat_health
-            self.cell_energy = self.world.food_grid[creat_pos[1], creat_pos[0]].item()
+            sel = self._selected_creature
+            self.food_type = self.world.creatures.food_types(torch.tensor([sel], device=pos.device)).item()
+            self.cell_energy = self.world.food_grid[self.food_type, creat_pos[1], creat_pos[0]].item()
             self.energy = self.post_eat_energy
 
             self.net_energy_delta = self.energy - self.pre_rot_energy

@@ -40,7 +40,8 @@ class CellStatusWindow(Window):
         with self.begin(imgui.WindowFlags_.no_move | imgui.WindowFlags_.no_saved_settings |
                     imgui.WindowFlags_.no_resize):
             self.main_text.render([
-                f"Food: {cell.food:.3f}",
+                (f"Food: {cell.food:.3f}" if len(cell.foods) == 1 else
+                 "Food: " + " / ".join(f"{f:.2f}" for f in cell.foods)),
                 f"Position: {cell._selected_cell[0]}, {cell._selected_cell[1]}"  # pylint: disable=protected-access
             ])
             if cell.update_state_available:

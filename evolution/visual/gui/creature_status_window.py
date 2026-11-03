@@ -97,6 +97,7 @@ class CreatureStatusWindow(Window):
                 self.eating_element.render([
                     f"Alive Energy: {creat.alive_cost:.6f}",
                     f"Food Eaten: {creat.food_eaten:.6f}",
-                    f"Cell Eaten Energy: {creat.cell_energy:.6f}",
+                    (f"Cell Eaten Energy: {creat.cell_energy:.6f}" if self.world.n_food_types == 1 else
+                     f"Cell Food (type {creat.food_type}): {creat.cell_energy:.6f}"),
                     f"Food Damage: {creat.food_dmg_taken:.6f}",
                 ])

@@ -1,5 +1,5 @@
 extern "C" __global__ 
-void eat(int* positions, float* eat_pcts, float* pct_eaten, float* sizes, float* age_speeds, float* food_grid,  // read from
+void eat(int* positions, int* food_types, float* eat_pcts, float* pct_eaten, float* sizes, float* age_speeds, float* food_grid,  // read from
     float* food_grid_updates, float* alive_costs, float* energies, // write to
         float* healths, float* ages, float* age_mults, 
     int num_creatures, int num_cells, float food_decr   // constants
@@ -8,19 +8,21 @@ void eat(int* positions, float* eat_pcts, float* pct_eaten, float* sizes, float*
     Read from:
         Positions: [N, 2], where N = num_creatures, where the coordinates are the cell position of the creature.
 
+        food_types: [N], the food grid (first index of food_grid) each creature eats from.
+
         eat_pcts: [N], where the coordinate is the percentage of food that the creature eats in a cell.
 
-        pct_eaten: [S, S], where S = num_cells, where the coordinate is the percentage of food eaten in a cell.
+        pct_eaten: [T, S, S], where S = num_cells, where the coordinate is the percentage of food eaten in a cell.
 
         Sizes: [N], where the coordinate is the size of the creature.
 
         Age speeds: [N], where the coordinate is the speed of aging of the creature.
 
-        food_grid: [S, S], where the coordinate is the amount of food in a cell
+        food_grid: [T, S, S], where the coordinate is the amount of food in a cell
 
 
     Write to:  
-        food_grid_updates: [S, S], where the coordinate is the amount of food to add to a cell.
+        food_grid_updates: [T, S, S], where the coordinate is the amount of food to add to a cell.
         (we need to do it separately because we can't write to the same memory we read from, and we later need to do growing on
         all cells at once, which would require a grid-wide syrchronization)
 
@@ -53,7 +55,7 @@ void eat(int* positions, float* eat_pcts, float* pct_eaten, float* sizes, float*
     float age_speed = age_speeds[creature];
     float eat_pct = eat_pcts[creature];
 
-    int cell_idx = y * num_cells + x;
+    int cell_idx = (food_types[creature] * num_cells + y) * num_cells + x;
     float pct_claimed = pct_eaten[cell_idx];
 
     float food = food_grid[cell_idx];

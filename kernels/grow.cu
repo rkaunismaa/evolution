@@ -3,18 +3,19 @@ void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, fl
           const float* capacity_mult) {
     /* 
     Read from:
-        food_grid_updates: [S, S], where the coordinate is the amount of food that has been lost to eating
+        food_grid_updates: [T, S, S], where the coordinate is the amount of food that has been lost to eating
 
     Write to:  
-        food_grid: [S, S], the coordinate is the amount of food in the cell
+        food_grid: [T, S, S], the coordinate is the amount of food in the cell
 
 
     Constants:
         num_cells: number of cells in the grid. (width + 2*pad)
         pad: padding of the grid.
+        (blockIdx.z is the food type: launch with one z-block per type)
         step_size: increment to scale food growth by
         max_food: food level that cells grow towards (and decay down to when above it)
-        capacity_mult: [S, S] per-cell multiplier on max_food, or null for a uniform max_food
+        capacity_mult: [T, S, S] per-cell multiplier on max_food, or null for a uniform max_food
 */
     // Get the index of the current thread
     int cell_x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -24,7 +25,7 @@ void grow(float* food_grid_updates, float* food_grid, int num_cells, int pad, fl
         return;
     }
 
-    int cell_idx = cell_y * num_cells + cell_x;
+    int cell_idx = (blockIdx.z * num_cells + cell_y) * num_cells + cell_x;
     float food = food_grid[cell_idx];
     food -= food_grid_updates[cell_idx];  // apply eating update
 

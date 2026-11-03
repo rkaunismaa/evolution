@@ -65,8 +65,20 @@ class Heatmap(Subscriber):
 
         self.cuda_heatmap = cuda_utils.register_cuda_image(self.heatmap_tex)
 
+    def shown_food_grid(self):
+        """[size, size] food to draw: the only grid, or with several food types, the selected
+        creature's own food (the mean over all types when no creature is selected)."""
+        grids = self.world.central_food_grid   # [food_types, size, size]
+        if grids.shape[0] == 1:
+            return grids[0]
+        selected = self.world.state.selected_creature
+        if selected:
+            idx = torch.tensor([selected.__index__()], device=grids.device)
+            return grids[self.world.creatures.food_types(idx).item()]
+        return grids.mean(0)
+
     def _update(self):
-        fgrid = self.world.central_food_grid
+        fgrid = self.shown_food_grid()
         max_value = max(fgrid.max().item(), self.cfg.max_food)
         min_value = min(fgrid.min().item(), -2.)
         # print(min_value, t.unravel_index(fgrid.argmin(), fgrid.shape))

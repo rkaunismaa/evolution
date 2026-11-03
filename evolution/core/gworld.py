@@ -23,7 +23,8 @@ class GWorld():
         self.cfg: Config = cfg
         self.device = device
         self.path = path
-        self.food_grid = torch.rand((cfg.size, cfg.size), device=self.device) * cfg.init_food_scale
+        # [food_types, S, S]: one grid per food type (see Config.food_types)
+        self.food_grid = torch.rand((self.n_food_types, cfg.size, cfg.size), device=self.device) * cfg.init_food_scale
         # pad with zeros on all sides
         self.food_grid = F.pad(self.food_grid, (cfg.food_sight,)*4, mode='constant', value=0)
         # per-cell max_food multiplier (rich and poor land), or None for uniform capacity
@@ -193,10 +194,14 @@ class GWorld():
         self.creatures.eat_grow(self.food_grid, self.state, self.food_capacity)
 
     @property
+    def n_food_types(self) -> int:
+        return getattr(self.cfg, 'food_types', 1)
+
+    @property
     def central_food_grid(self):
-        """Return the central part of the food grid, excluding the padding."""
+        """Return the central part of the food grid, excluding the padding: [food_types, size, size]."""
         pad = self.cfg.food_sight
-        return self.food_grid[pad:-pad, pad:-pad]
+        return self.food_grid[:, pad:-pad, pad:-pad]
 
     @property
     def population(self) -> int:
@@ -284,7 +289,10 @@ class GWorld():
             raise ValueError("No path provided to write checkpoint to.")
 
         seed = self.state.time
-        fgrid = quantize(self.food_grid, map_location=torch.device('cpu')) if quantized else self.food_grid
+        # saved as [food_types * S, S]: quantization is per column, so stacking the types keeps one
+        # scale per column (as with the original single [S, S] grid) instead of one per cell
+        flat_grid = self.food_grid.view(-1, self.food_grid.shape[-1])
+        fgrid = quantize(flat_grid, map_location=torch.device('cpu')) if quantized else flat_grid
         field = self.food_capacity_field
         torch.save({'food_grid': fgrid,
                     'food_capacity_field': field.state_dict() if field is not None else None,
@@ -320,7 +328,7 @@ class GWorld():
         fgrid = checkpoint['food_grid']
         if isinstance(fgrid, QuantizedData):
             fgrid = fgrid.dequantize(map_location=instance.device)
-        instance.food_grid = fgrid
+        instance.food_grid = fgrid.reshape(-1, fgrid.shape[-1], fgrid.shape[-1]).contiguous()   # [T, S, S]
 
         field_state = checkpoint.get('food_capacity_field')   # the field is a function of time
         if field_state is not None:

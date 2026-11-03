@@ -22,6 +22,8 @@ if __name__ == '__main__':
                         help='Start the simulation running instead of paused (space toggles pause)')
     parser.add_argument('--max_creatures', type=int, default=None,
                         help='Override max_creatures from the chosen config (GPU memory scales linearly with it)')
+    parser.add_argument('--food_types', type=int, default=None,
+                        help='Number of food types; creature colour picks which one each eats (new games only)')
 
     benchmark_opts = parser.add_argument_group('Benchmarking options')
     benchmark_opts.add_argument('--style', choices=['nsys', 'torch-profile', 'cuda-events', 'tune-hyperparams'],
@@ -53,6 +55,9 @@ if __name__ == '__main__':
     if args.max_creatures is not None:
         cfg.max_creatures = args.max_creatures
         cfg.start_creatures = min(cfg.start_creatures, cfg.max_creatures)
+
+    if args.food_types is not None:
+        cfg.food_types = args.food_types
 
     if args.seed >= 0:
         torch.random.manual_seed(args.seed)

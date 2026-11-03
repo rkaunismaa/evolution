@@ -13,16 +13,17 @@ def _reference_eat_grow(world, grow=True, step_mult=1, capacity=None):
     Returns new (food_grid, energies, healths, ages, age_mults)."""
     cfg, c = world.cfg, world.creatures
     assert cfg.alive_cost.expr == '0.01f * x', "reference hard-codes the default alive_cost"
-    food_grid = world.food_grid.clone()
-    W = food_grid.shape[0]
+    food_grid = world.food_grid.clone()   # [T, W, W]
+    T, W = food_grid.shape[0], food_grid.shape[-1]
     pos = c.positions.data.int() + c.pad
-    cell = (pos[:, 1] * W + pos[:, 0]).long()
+    types = c.food_types().long()
+    cell = ((types * W + pos[:, 1]) * W + pos[:, 0]).long()
     eat_pct, sizes = c.eat_pcts.data, c.sizes.data
     energies, healths = c.energies.data.clone(), c.healths.data.clone()
     ages, age_mults = c.ages.data.clone(), c.age_mults.data.clone()
 
     # setup_eat_grid: total share claimed in each cell
-    pct_eaten = torch.zeros(W * W, device=food_grid.device).index_add_(0, cell, eat_pct)
+    pct_eaten = torch.zeros(T * W * W, device=food_grid.device).index_add_(0, cell, eat_pct)
     claimed = pct_eaten[cell]
 
     # eat
@@ -40,11 +41,11 @@ def _reference_eat_grow(world, grow=True, step_mult=1, capacity=None):
         cover = cfg.food_cover_decr * eat_pct * cfg.food_cover_decr_pct
     else:
         cover = torch.full_like(food, cfg.food_cover_decr)
-    updates = torch.zeros(W * W, device=food_grid.device).index_add_(0, cell, food + cover)
+    updates = torch.zeros(T * W * W, device=food_grid.device).index_add_(0, cell, food + cover)
     ages = ages + 1
 
     if not grow:
-        return (food_grid - updates.view(W, W)), energies, healths, ages, age_mults
+        return (food_grid - updates.view(T, W, W)), energies, healths, ages, age_mults
 
     # grow (padding untouched)
     f = food_grid.view(-1) - updates
@@ -53,24 +54,26 @@ def _reference_eat_grow(world, grow=True, step_mult=1, capacity=None):
     f = torch.where(f < 0, f + growth * cfg.food_recovery_rate,
                     torch.where(f > cap, f + growth * cfg.food_decay_rate,
                                 f + growth * cfg.food_growth_rate))
-    grown = f.view(W, W)
+    grown = f.view(T, W, W)
     p = c.pad
     new_grid = food_grid.clone()
-    new_grid[p:W - p, p:W - p] = grown[p:W - p, p:W - p]
+    new_grid[:, p:W - p, p:W - p] = grown[:, p:W - p, p:W - p]
     return new_grid, energies, healths, ages, age_mults
 
 
+@pytest.mark.parametrize("food_types", [1, 3], ids=["one-food", "three-foods"])
 @pytest.mark.parametrize("scaled", [0, 1], ids=["flat-cover", "scaled-cover"])
 @pytest.mark.parametrize("crowded", [False, True])
-def test_eat_grow_matches_reference(make_world, crowded, scaled):
+def test_eat_grow_matches_reference(make_world, crowded, scaled, food_types):
     # crowded: many creatures on a few cells, so cells are over-claimed (pct_eaten > 1)
-    world = make_world(size=40, food_cover_scaled=scaled) if crowded else make_world(food_cover_scaled=scaled)
+    opts = dict(food_cover_scaled=scaled, food_types=food_types)
+    world = make_world(size=40, **opts) if crowded else make_world(**opts)
     c = world.creatures
     for _ in range(30):     # let ages, energies and food levels spread out
         world.step()
     if crowded:
         c.positions.data[:] = torch.rand_like(c.positions.data) * 3 + 10
-    world.food_grid[world.food_grid.shape[0] // 2] = -1.0   # a row of negative food
+    world.food_grid[:, world.food_grid.shape[1] // 2] = -1.0   # a row of negative food
     c.ages.data[: c.population // 4] = 1e6                  # some old creatures
 
     ref = _reference_eat_grow(world)
@@ -100,11 +103,13 @@ def test_hsv_spiral_maps_zero_to_black_and_colors_into_range(make_world):
     assert rgb.min() >= 0 and rgb.max() <= 255
 
 
+@pytest.mark.parametrize("food_types", [1, 3], ids=["one-food", "three-foods"])
 @pytest.mark.parametrize("crowded", [False, True])
-def test_batched_food_growth_matches_reference(make_world, crowded):
+def test_batched_food_growth_matches_reference(make_world, crowded, food_types):
     """food_grow_every=4: steps that are not multiples of 4 only apply eating (at creature cells);
     multiples of 4 grow the whole grid by 4x the step."""
-    world = make_world(size=40, food_grow_every=4) if crowded else make_world(food_grow_every=4)
+    opts = dict(food_grow_every=4, food_types=food_types)
+    world = make_world(size=40, **opts) if crowded else make_world(**opts)
     c = world.creatures
     for _ in range(30):
         world.step()
@@ -120,13 +125,14 @@ def test_batched_food_growth_matches_reference(make_world, crowded):
             torch.testing.assert_close(g, r, rtol=1e-4, atol=1e-4, msg=f"{name} at time {t}")
 
 
-def test_grow_with_capacity_map_matches_reference(make_world):
-    world = make_world(food_capacity_variation=0.6, food_capacity_scale=30.0)
+@pytest.mark.parametrize("food_types", [1, 3], ids=["one-food", "three-foods"])
+def test_grow_with_capacity_map_matches_reference(make_world, food_types):
+    world = make_world(food_capacity_variation=0.6, food_capacity_scale=30.0, food_types=food_types)
     c = world.creatures
     for _ in range(30):
         world.step()
     # push some cells above their local capacity so the decay branch runs too
-    world.food_grid[c.pad:-c.pad, c.pad:c.pad + 20] = 30.0
+    world.food_grid[:, c.pad:-c.pad, c.pad:c.pad + 20] = 30.0
     ref = _reference_eat_grow(world, capacity=world.food_capacity)
     c.eat_grow(world.food_grid, world.state, world.food_capacity)
     torch.testing.assert_close(world.food_grid, ref[0], rtol=1e-4, atol=1e-4)

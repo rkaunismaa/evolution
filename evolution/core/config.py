@@ -99,6 +99,11 @@ class Config:
     # grow food only every this many steps, by food_step_size * food_grow_every. Growth passes over the
     # whole grid, so >1 is cheaper for big worlds; eating is still applied every step
     food_grow_every: int = 1
+    # species-specific food: the number of separate food grids. A creature's colour picks the one it
+    # eats, sees and leaves food in when it dies: colours [1, 255] are split into food_types equal
+    # bands. Each type grows independently, with its own rich and poor land when
+    # food_capacity_variation > 0. 1 = a single food shared by everyone
+    food_types: int = 1
 
 
     ### Creatures

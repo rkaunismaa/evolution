@@ -182,6 +182,15 @@ class Creatures:
             self.traits.add_with_deaths(dead_idxs, alive, num_dead, new_creatures, state)
 
     @Profile.cuda_profile
+    def food_types(self, idxs: Tensor | None = None) -> Tensor:
+        """int32 [N] (or [len(idxs)]) index of the food grid each creature eats from: colours [1, 255]
+        split into cfg.food_types equal bands, so similarly coloured creatures share a food."""
+        colors = self.colors if idxs is None else self.colors[idxs]
+        n_types = self.cfg.food_types
+        if n_types == 1:
+            return torch.zeros(colors.shape[0], dtype=torch.int32, device=self.device)
+        return ((colors - 1.0) * (n_types / 254.0)).int().clamp_(0, n_types - 1)
+
     def _kill_dead(self, central_food_grid: Tensor) -> Tuple[Tensor, int, Tensor]:
         """If any creature drops below 0 health or energy, kill it. Update the food grid by depositing an amount of food
         that depends on the creature's size at death.
@@ -207,7 +216,8 @@ class Creatures:
         if num_dead > 0:
             dead_posns = self.positions[dead_idxs].long()
             # food_grid[dead_posns[..., 1], dead_posns[..., 0]] += self.cfg.dead_drop_food(self.sizes[self.dead])
-            central_food_grid.index_put_((dead_posns[..., 1], dead_posns[..., 0]),
+            # dead creatures leave food of their own type
+            central_food_grid.index_put_((self.food_types(dead_idxs).long(), dead_posns[..., 1], dead_posns[..., 0]),
                                 self.cfg.dead_drop_food(self.sizes[dead_idxs]),
                                 accumulate=True)
         else:
@@ -275,6 +285,8 @@ class Creatures:
         state.selected_cell.extract_pre_grow_state()
 
         pos = self.positions.int() + self.pad
+        food_types = self.food_types()
+        n_cells = food_grid.shape[-1]   # food_grid is [food_types, S, S], S including padding
 
         # pct_eaten and food_grid_updates are only ever written at creatures' cells, so we keep them
         # around between steps and re-zero just those cells at the end, rather than allocating and
@@ -288,29 +300,30 @@ class Creatures:
         threads_per_block = 512
         blocks_per_grid = self.population // threads_per_block + 1
         self.kernels('setup_eat_grid', blocks_per_grid, threads_per_block,
-                     pos, self.eat_pcts, pct_eaten, self.population, food_grid.shape[0])
+                     pos, food_types, self.eat_pcts, pct_eaten, self.population, n_cells)
 
         # calculate how much food each creature eats, add 1 to ages, update energies, take away living costs
         alive_costs = torch.zeros(self.population, device=self.device, dtype=torch.float32)
         self.kernels('eat', blocks_per_grid, threads_per_block,
-                     pos, self.eat_pcts, pct_eaten, self.sizes, self.age_speeds, food_grid,
+                     pos, food_types, self.eat_pcts, pct_eaten, self.sizes, self.age_speeds, food_grid,
                      food_grid_updates, alive_costs, self.energies, self.healths, self.ages, self.age_mults,
-                     self.population, food_grid.shape[0], self.cfg.food_cover_decr)
+                     self.population, n_cells, self.cfg.food_cover_decr)
 
         # grow food, apply eating costs
         # step_size = (torch.sum(alive_costs)/self.cfg.max_food/(self.cfg.size**2)).item()
         # step_size = (self.cfg.max_food / (self.cfg.size**(1.9)))#.item()
-        touched = pos[:, 1].long() * food_grid.shape[1] + pos[:, 0].long()
+        touched = (food_types.long() * n_cells + pos[:, 1].long()) * n_cells + pos[:, 0].long()
         if state.time % self.cfg.food_grow_every == 0:
             # growing touches every cell, so we only do it every food_grow_every steps, with a
             # proportionally larger step (the grow kernel also applies this step's eating updates)
             step_size = self.cfg.food_step_size * self.cfg.food_grow_every
             threads_per_block = (16, 16)
-            blocks_per_grid = (food_grid.shape[0] // threads_per_block[0] + 1,
-                               food_grid.shape[1] // threads_per_block[1] + 1)
+            blocks_per_grid = (n_cells // threads_per_block[0] + 1,
+                               n_cells // threads_per_block[1] + 1,
+                               food_grid.shape[0])   # one z-block per food type
 
             self.kernels('grow', blocks_per_grid, threads_per_block,
-                         food_grid_updates, food_grid, food_grid.shape[0], self.pad, step_size, self.cfg.max_food,
+                         food_grid_updates, food_grid, n_cells, self.pad, step_size, self.cfg.max_food,
                          capacity_mult if capacity_mult is not None else 0)   # 0 = null pointer
         else:
             # no growth this step: just apply the eating updates, which are only at creatures' cells
@@ -319,32 +332,35 @@ class Creatures:
             flat = food_grid.view(-1)
             flat[touched] = flat[touched] - food_grid_updates.view(-1)[touched]
 
-        state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size, pos)
+        state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size, pos, food_types)
         state.selected_creature.extract_post_eat_state(pos, alive_costs)
 
         pct_eaten.view(-1).index_fill_(0, touched, 0.)
         food_grid_updates.view(-1).index_fill_(0, touched, 0.)
 
 
-    def extract_food_windows(self, indices, food_grid):
+    def extract_food_windows(self, indices, food_grid, food_types):
         """Indices is [N, 2] indices into food_grid.
-        Food grid is [S, S], where S is the width of the world.
+        Food grid is [T, S, S], where T is the number of food types and S the padded width of the world.
+        food_types is [N], the food grid each creature sees.
         Returns a [N, W] tensor of the food in the W x W window around each index,
         which goes as an input into creatures' brains."""
         windows = indices.unsqueeze(1) + self.offsets  # [N, 1, 2] + [1, 9, 2] = [N, 9, 2]
         # if windows.min() < 0 or windows.max() >= food_grid.shape[0]:
         #     raise ValueError("OOB")
-        return food_grid[windows[..., 1], windows[..., 0]]
+        if food_grid.shape[0] == 1:
+            return food_grid[0, windows[..., 1], windows[..., 0]]
+        return food_grid[food_types.long().unsqueeze(1), windows[..., 1], windows[..., 0]]
 
 
     def collect_stimuli(self, collisions, food_grid):
-        """Collisions: [N, R], food_grid: [W, W] (W = world size) -> [N, F],
+        """Collisions: [N, R], food_grid: [T, W, W] (T food types, W = padded world size) -> [N, F],
         where F is the number of features that get passed in to the creatures' brains."""
         # get the food in the creature's vicinity
         # we must add self.pad, because positions are stored in central_food_grid coordinates,
         # but we need to index into food_grid with food_grid coordinates (which includes padding)
         posn = self.positions.long() + self.pad
-        food = self.extract_food_windows(posn, food_grid)  # [N, (2*sight+1)**2]
+        food = self.extract_food_windows(posn, food_grid, self.food_types())  # [N, (2*sight+1)**2]
         rays_results = collisions
 
         return torch.cat([rays_results,  # type: ignore

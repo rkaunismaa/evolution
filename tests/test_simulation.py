@@ -17,8 +17,8 @@ def _check_invariants(world):
         assert torch.isfinite(v.data).all(), name
     assert torch.isfinite(world.food_grid).all()
     p = c.pad   # padding around the food grid never changes
-    assert world.food_grid[:p].eq(0).all() and world.food_grid[-p:].eq(0).all()
     assert world.food_grid[:, :p].eq(0).all() and world.food_grid[:, -p:].eq(0).all()
+    assert world.food_grid[:, :, :p].eq(0).all() and world.food_grid[:, :, -p:].eq(0).all()
 
 
 @pytest.mark.parametrize("opts", [
@@ -132,13 +132,13 @@ def test_food_capacity_map_shape_range_and_smoothness(make_world):
     cap = world.food_capacity
     assert cap.shape == world.food_grid.shape and cap.is_contiguous()
     p = world.creatures.pad
-    central = cap[p:-p, p:-p]
+    central = cap[0, p:-p, p:-p]
     assert central.min() >= 0.0
     assert abs(central.std().item() - 0.375 * 0.5) < 0.01       # contrast set by the variation
     inside = ((central >= 0.5) & (central <= 1.5)).float().mean().item()
     assert inside > 0.97                                        # nearly all land within 1 +- variation
     assert abs(central.mean().item() - 1.0) < 1e-3  # waves average out exactly over the world
-    assert cap[:p].eq(1).all()                      # padding is neutral
+    assert cap[:, :p].eq(1).all()                      # padding is neutral
     # smooth: neighbouring cells differ far less than the overall spread
     spread = (central.max() - central.min()).item()
     assert (central[1:] - central[:-1]).abs().max() < spread / 4
@@ -157,8 +157,8 @@ def test_food_settles_near_local_capacity(make_world):
     for _ in range(40):
         world.state.time += 1
         c.eat_grow(world.food_grid, world.state, world.food_capacity)
-    food = world.food_grid[p:-p, p:-p]
-    target = world.cfg.max_food * world.food_capacity[p:-p, p:-p]
+    food = world.food_grid[:, p:-p, p:-p]
+    target = world.cfg.max_food * world.food_capacity[:, p:-p, p:-p]
     corr = torch.corrcoef(torch.stack([food.flatten(), target.flatten()]))[0, 1]
     assert corr > 0.99
 
@@ -204,7 +204,7 @@ def test_drifting_field_decorrelates_over_change_steps(make_world):
     field, p = world.food_capacity_field, world.creatures.pad
     def at(t):
         field.update(t)
-        return field.multiplier[p:-p, p:-p].flatten().clone()
+        return field.multiplier[:, p:-p, p:-p].flatten().clone()
     base = at(0)
     corr = lambda t: torch.corrcoef(torch.stack([base, at(t)]))[0, 1].item()
     assert corr(20) > 0.95       # slow: barely changes over a few dozen steps

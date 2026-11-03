@@ -30,23 +30,28 @@ class CellState:
     def __bool__(self):
         return self._selected_cell is not None
 
+    def _food_at_cell(self) -> Tensor:
+        """[food_types] food levels at the selected cell."""
+        return self.world.food_grid[:, self._selected_cell[1] + self.pad, self._selected_cell[0] + self.pad]
+
     def extract_general_state(self):
         if self._selected_cell is not None:
-            self.food = self.world.food_grid[self._selected_cell[1] + self.pad,
-                                                self._selected_cell[0] + self.pad].item()
+            self.foods = self._food_at_cell().tolist()   # one entry per food type
+            self.food = sum(self.foods)
             self.update_state_available = False
 
     def extract_pre_grow_state(self):
         if self._selected_cell is not None:
-            self.prev_food = self.world.food_grid[self._selected_cell[1] + self.pad,
-                                       self._selected_cell[0] + self.pad].item()
+            self.prev_food = self._food_at_cell().sum().item()
 
     def extract_post_grow_state(self, pct_eaten: Tensor, food_grid_updates: Tensor, step_size: float,
-                                positions: Tensor):
-        """`positions` is the [N, 2] padded integer cell of each creature, as passed to the eat kernel."""
+                                positions: Tensor, food_types: Tensor):
+        """`positions` is the [N, 2] padded integer cell of each creature and `food_types` [N] the food
+        each one eats, as passed to the eat kernel. With several food types, the amounts below are
+        totals over all types."""
         if self._selected_cell is not None:
             x, y = self._selected_cell[0] + self.pad, self._selected_cell[1] + self.pad
-            self.cell_pct_eaten = pct_eaten[y, x].item()
+            self.cell_pct_eaten = pct_eaten[:, y, x].sum().item()
             # this is also bad practice since we are calculating cover_cost twice (inside the eat.cu
             # CUDA kernel and here), but there's no way to avoid it without allocating a ton of memory
             if self.cfg.food_cover_scaled:
@@ -54,10 +59,9 @@ class CellState:
             else:   # older games: a flat food_cover_decr for every creature in the cell
                 n_here = ((positions[:, 0] == x) & (positions[:, 1] == y)).sum().item()
                 self.cover_cost = self.cfg.food_cover_decr * n_here
-            self.eaten_amt = food_grid_updates[self._selected_cell[1] + self.pad,
-                                          self._selected_cell[0] + self.pad].item() - self.cover_cost
-            self.post_growth_food = self.world.food_grid[self._selected_cell[1] + self.pad,
-                                         self._selected_cell[0] + self.pad].item()
+            self.eaten_amt = food_grid_updates[:, y, x].sum().item() - self.cover_cost
+            self.foods = self._food_at_cell().tolist()
+            self.post_growth_food = sum(self.foods)
             self.pre_grow_food = self.prev_food - self.cover_cost - self.eaten_amt
             self.growth_amt = self.post_growth_food - self.pre_grow_food
             self.step_size = step_size
