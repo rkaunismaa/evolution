@@ -145,11 +145,15 @@ def test_cell_panel_totals_over_food_types(make_world, scaled):
 def test_food_types_share_the_worlds_food(make_world, share):
     """Shared (the default): each type grows towards max_food / food_types, so total food matches one
     type. Unshared: every type grows towards the full max_food."""
-    world = make_world(food_types=3, food_types_share=share, food_step_size=0.02, food_cover_decr=0.0)
+    # every type starts with the full init_food_scale either way, so the first generation survives
+    start = make_world(food_types=3, food_types_share=share)
+    assert (start.central_food_grid.amax((1, 2)) > start.cfg.init_food_scale * 0.9).all()
+    # growth: start from no food, so every cell grows up towards its type's share
+    world = make_world(food_types=3, food_types_share=share, food_step_size=0.02, food_cover_decr=0.0,
+                       init_food_scale=0.0)
     c, p = world.creatures, world.creatures.pad
     per_type = world.cfg.max_food / 3 if share else world.cfg.max_food
     assert world.cfg.max_food_per_type() == pytest.approx(per_type)
-    assert world.food_grid.max() <= world.cfg.init_food_scale * (1 / 3 if share else 1)   # initial food too
     c.positions.data[:] = 1.0              # park everyone in one corner cell
     c.eat_pcts.data[:] = 0.0               # and stop them eating
     for _ in range(60):

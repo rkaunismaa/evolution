@@ -261,14 +261,26 @@ class Creatures:
         if getattr(self.cfg, 'sexual_reproduction', 0):
             mothers, fathers = self._find_mates(reproducers)
             num_pairs = mothers.shape[0]
-            if num_pairs == 0 or max_reproducers < 2:
-                return
             if 2 * num_pairs > max_reproducers:   # keep a random subset of the pairs that fits
                 keep = torch.randperm(num_pairs, device=self.device)[:max_reproducers // 2]
                 mothers, fathers = mothers[keep], fathers[keep]
-            # two children per pair: each parent pays for (and is the 'reproducer' of) one of them
-            reproducers = torch.cat([mothers, fathers])
-            partners = torch.cat([fathers, mothers])
+                num_pairs = mothers.shape[0]
+            # creatures with no mate breed alone with probability mate_fallback_prob, if there is room
+            solo = reproducers[:0]
+            fallback = getattr(self.cfg, 'mate_fallback_prob', 0.0)
+            room = max_reproducers - 2 * num_pairs
+            if fallback > 0 and room > 0:
+                unpaired = torch.ones(self.population, dtype=torch.bool, device=self.device)
+                unpaired[mothers] = False
+                unpaired[fathers] = False
+                solo = reproducers[unpaired[reproducers]]
+                solo = solo[torch.rand(solo.shape[0], device=self.device) < fallback][:room]
+            if num_pairs == 0 and solo.shape[0] == 0:
+                return
+            # two children per pair: each parent pays for (and is the 'reproducer' of) one of them.
+            # A creature breeding alone is its own partner, so crossover leaves it a plain copy
+            reproducers = torch.cat([mothers, fathers, solo])
+            partners = torch.cat([fathers, mothers, solo])
             num_reproducers = reproducers.shape[0]
         else:
             reproducers, num_reproducers = self._reduce_reproducers(reproducers, num_reproducers, max_reproducers)

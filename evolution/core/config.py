@@ -104,9 +104,10 @@ class Config:
     # bands. Each type grows independently, with its own rich and poor land when
     # food_capacity_variation > 0. 1 = a single food shared by everyone
     food_types: int = 1
-    # 1 = the food types share the world's food: max_food and init_food_scale are totals over all
-    # types, so each type grows towards max_food / food_types and the world holds as much food as
-    # with one type (species then compete for it). 0 = every type gets the full max_food
+    # 1 = the food types share the world's food: max_food is a total over all types, so each type
+    # grows towards max_food / food_types and the world holds as much food as with one type (species
+    # then compete for it). Every type still starts with init_food_scale, so the first generation can
+    # survive. 0 = every type gets the full max_food
     food_types_share: int = 1
 
 
@@ -183,6 +184,10 @@ class Config:
     sexual_reproduction: int = 0
     mate_range: float = 50.0  # 20 left the population mate-limited for ~12,000 steps on the large preset
     mate_color_range: float = 20.0
+    # chance per reproduction round that a ready creature with no mate breeds alone (asexually).
+    # Keeps sparse populations alive: with 3 shared food types and none, the large preset went
+    # extinct by step 5,500. 0 = strictly sexual
+    mate_fallback_prob: float = 0.05
 
     ### Aging
 
@@ -210,7 +215,7 @@ class Config:
     max_game_speed: int = 1000 # maximum game speed (steps per frame)
 
     def food_type_share(self) -> float:
-        """Fraction of max_food (and init_food_scale) that each food type gets."""
+        """Fraction of max_food that each food type grows towards."""
         n_types = getattr(self, 'food_types', 1)
         return 1.0 / n_types if getattr(self, 'food_types_share', 1) else 1.0
 

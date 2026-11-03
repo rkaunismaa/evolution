@@ -100,7 +100,8 @@ def test_each_pair_has_two_children_paid_for_by_each_parent(make_world):
 
 
 def test_unpaired_creatures_wait(make_world):
-    world = make_world(sexual_reproduction=1, mate_range=1.0, mate_color_range=0.0, start_creatures=64)
+    world = make_world(sexual_reproduction=1, mate_range=1.0, mate_color_range=0.0, start_creatures=64,
+                       mate_fallback_prob=0.0)
     c = world.creatures
     world.step()
     c.ages.data[:] = 1e4
@@ -132,3 +133,35 @@ def test_older_configs_reproduce_asexually():
         del cfg.__dict__[name]
     old = pickle.loads(pickle.dumps(cfg))
     assert old.sexual_reproduction == 0
+
+
+def test_unpaired_creatures_can_breed_alone(make_world):
+    """mate_fallback_prob=1: every creature without a mate has one plain (asexual) child."""
+    world = make_world(sexual_reproduction=1, mate_range=1.0, mate_color_range=0.0, start_creatures=64,
+                       mate_fallback_prob=1.0)
+    c = world.creatures
+    world.step()
+    c.ages.data[:] = 1e4
+    c.energies.data[:] = 1e3
+    c.healths.data[:] = 1e3
+    pop = c.population
+    sizes = c.sizes.data.clone()
+    c.mutation_rates.data[:] = 0.0                 # so each child is an exact copy of its parent
+    c.fused_kill_reproduce(world.central_food_grid, world.state)
+    assert c.n_births == pop                       # nobody found a mate, so all bred alone
+    assert c.n_children.data.sum().item() == pop and c.n_children.data.max().item() == 1
+    kids = c.sizes.data[c.n_children.data == 0]    # the new creatures (parents now have 1 child)
+    assert torch.isin(kids, sizes).all()
+
+
+def test_paired_creatures_do_not_also_breed_alone(make_world):
+    world = make_world(sexual_reproduction=1, mate_range=1000.0, mate_color_range=255.0, start_creatures=64,
+                       mate_fallback_prob=1.0)
+    c = world.creatures
+    world.step()
+    c.ages.data[:] = 1e4
+    c.energies.data[:] = 1e3
+    c.healths.data[:] = 1e3
+    pop = c.population
+    c.fused_kill_reproduce(world.central_food_grid, world.state)
+    assert c.n_births == pop and c.n_children.data.max().item() == 1   # one child each, no extras
