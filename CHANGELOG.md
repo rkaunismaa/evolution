@@ -10,6 +10,7 @@ Species-specific food is built and off by default: `food_types` (or `--food_type
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `990e858` | Plots window kept inside the game window | A layout saved on a larger screen opened it partly off-screen |
 | 2026-11-03 | `33c6f6b` | New `food_types` option and `--food_types` flag: several food grids, one per colour band | README planned feature: species-specific food, so different niches can co-exist |
 | 2026-11-03 | `d402813` | Cell panel shows the flat food-cover cost in older games; new test checks the panel against the eat kernel | The panel always showed the scaled cost, so its cover, eaten and growth amounts were wrong for those games |
 | 2026-11-03 | `9e91182` | `food_sight=2` in the `large` preset; first brain layer 130 → 74 inputs | Blinding food vision changed nothing over 60,000 steps, and the view was 62% of the first layer's weights |
