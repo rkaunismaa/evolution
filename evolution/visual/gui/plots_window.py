@@ -53,6 +53,7 @@ class PlotsWindow(Window):
         with self.begin(imgui.WindowFlags_.menu_bar):
             if not self.open:
                 return
+            self._keep_on_screen()
             if imgui.begin_menu_bar():
                 if imgui.begin_menu('Show'):
                     for p in self.plots:
@@ -75,6 +76,20 @@ class PlotsWindow(Window):
                     height = (avail_h - remaining_headers * header_h) / (1 + open_after) \
                         - imgui.get_style().item_spacing.y
                     p.render((avail_w, max(height, font * self.MIN_PLOT_HEIGHT)))
+
+    @staticmethod
+    def _keep_on_screen():
+        """Move (and if needed shrink) the current window so it lies inside the display. A layout
+        saved in imgui.ini on a larger screen or window would otherwise open partly off-screen."""
+        disp_w, disp_h = imgui.get_io().display_size
+        (x, y), (w, h) = imgui.get_window_pos(), imgui.get_window_size()
+        new_w, new_h = min(w, disp_w), min(h, disp_h)
+        new_x = min(max(x, 0.0), disp_w - new_w)
+        new_y = min(max(y, 0.0), disp_h - new_h)
+        if (new_w, new_h) != (w, h):
+            imgui.set_window_size((new_w, new_h))
+        if (new_x, new_y) != (x, y):
+            imgui.set_window_pos((new_x, new_y))
 
     def _has_saved_layout(self) -> bool:
         """Whether imgui.ini already holds a position and size for this window."""
