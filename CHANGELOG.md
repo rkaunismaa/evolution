@@ -197,7 +197,7 @@ Test runs on the `large` preset, 30,000 steps, seed 0. The mate-range columns we
 | Everything (first version) | 136.7 | 945 | 53.3% | 25.3% | 0.350 |
 | Everything except mutation rates (current) | 55.8 | 2,323 | 5.4% | 4.5% | 0.030 |
 
-- **Mixing mutation rates let them run away.** In an asexual lineage, a low mutation rate stays tied to the good genes it protects, so selection holds rates down. Crossover breaks that link, and the median rate rose about 9 times. Heavily mutated children could not steer, ran into others and were killed in attacks.
+- **Mixing mutation rates let them run away.** In an asexual lineage, a low mutation rate stays tied to the good genes it protects, so selection holds rates down. Crossover breaks that link, and the median rate rose about 9 times. Children came out heavily mutated, and many died young, half of them in attacks.
 - **Brain crossover by neuron is nearly harmless**, as is mixing the other traits.
 - Children now take their mutation rates whole from the paying parent.
 
