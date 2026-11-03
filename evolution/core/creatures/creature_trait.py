@@ -100,7 +100,8 @@ class CreatureTrait:
         return child
 
     @Profile.cuda_profile
-    def reproduce_mutable(self, name: str, rng: 'BatchedRandom', reproducers: Tensor, mut: Tensor | float):
+    def reproduce_mutable(self, name: str, rng: 'BatchedRandom', reproducers: Tensor, mut: Tensor | float,
+                          partners: Tensor | None = None, mask: Tensor | None = None):
         """Generate child traits from the current CreatureTrait by adding random noise to the
         parent's traits, and then normalizing. The noise is scaled by the mut Tensor, which is
         the mutation rate of that particular trait. If force_mutable is True, then the trait
@@ -111,18 +112,24 @@ class CreatureTrait:
             rng: BatchedRandom object for generating random noise.
             reproducers: index Tensor (into current memory) of the creatures that are reproducing.
             mut: Tensor of mutation rates for each trait.
-            force_mutable: If True, treat the trait as mutable even if it isn't.
+            partners: optional index Tensor of each reproducer's mate (sexual reproduction). Where
+                `mask` is True, the child inherits the partner's value instead of the reproducer's.
+            mask: boolean Tensor that broadcasts against [num_reproducers, *shape].
         """
         if isinstance(mut, Tensor):
             mut = mut[:, self.init.mut_idx].view(-1, *([1]*(self.data.dim()-1)))
         child = CreatureTrait(self._shape, self.init, self.normalize_func, self.device)
         perturb = rng.fetch_params(name) * mut
-        child.data = self[reproducers] + perturb
+        inherited = self[reproducers]
+        if partners is not None:
+            inherited = torch.where(mask, self[partners], inherited)
+        child.data = inherited + perturb
         child.normalize()
         return child
 
     @Profile.cuda_profile
-    def reproduce(self, name: str, rng: 'BatchedRandom', reproducers: Tensor,  num_reproducers: int, mut: Tensor):
+    def reproduce(self, name: str, rng: 'BatchedRandom', reproducers: Tensor,  num_reproducers: int, mut: Tensor,
+                  partners: Tensor | None = None, mask: Tensor | None = None):
         """Select the appropriate reproduction method based on the reproduce_type attribute to
         generate the child traits.
 
@@ -131,12 +138,13 @@ class CreatureTrait:
             reproducers: boolean Tensor (size of current memory) of the creatures that are reproducing.
             num_reproducers: Number of creatures that are reproducing.
             mut: Tensor of mutation rates for each trait.
+            partners, mask: sexual reproduction only, see reproduce_mutable.
         """
         if self.init.style == InitializerStyle.FILLABLE:
             return self.reproduce_fillable(name, rng, num_reproducers)
 
         if self.init.style == InitializerStyle.MUTABLE:
-            return self.reproduce_mutable(name, rng, reproducers, mut)
+            return self.reproduce_mutable(name, rng, reproducers, mut, partners, mask)
 
         if self.init.style == InitializerStyle.FORCE_MUTABLE:
             return self.reproduce_mutable(name, rng, reproducers, self.init.mut)

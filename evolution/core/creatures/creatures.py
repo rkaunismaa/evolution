@@ -257,16 +257,59 @@ class Creatures:
         if num_reproducers == 0:  # no one can reproduce
             return
 
-        # print(int(num_reproducers), num_dead)
-        reproducers, num_reproducers = self._reduce_reproducers(reproducers, num_reproducers, max_reproducers)
+        partners = None
+        if getattr(self.cfg, 'sexual_reproduction', 0):
+            mothers, fathers = self._find_mates(reproducers)
+            num_pairs = mothers.shape[0]
+            if num_pairs == 0 or max_reproducers < 2:
+                return
+            if 2 * num_pairs > max_reproducers:   # keep a random subset of the pairs that fits
+                keep = torch.randperm(num_pairs, device=self.device)[:max_reproducers // 2]
+                mothers, fathers = mothers[keep], fathers[keep]
+            # two children per pair: each parent pays for (and is the 'reproducer' of) one of them
+            reproducers = torch.cat([mothers, fathers])
+            partners = torch.cat([fathers, mothers])
+            num_reproducers = reproducers.shape[0]
+        else:
+            reproducers, num_reproducers = self._reduce_reproducers(reproducers, num_reproducers, max_reproducers)
         self.n_children[reproducers] += 1
 
         # could fuse this
         self.energies[reproducers] -= self.sizes[reproducers]  # subtract off the energy that you've put into the world
         self.energies[reproducers] /= self.cfg.reproduce_energy_loss_frac  # then lose a bit extra because this process is lossy
 
-        new_creatures = self.traits.reproduce_traits(self.mutation_rates[reproducers], reproducers, num_reproducers)
+        new_creatures = self.traits.reproduce_traits(self.mutation_rates[reproducers], reproducers, num_reproducers,
+                                                     partners)
         return new_creatures
+
+    def _find_mates(self, candidates: Tensor) -> Tuple[Tensor, Tensor]:
+        """Pair up creatures that are ready to reproduce (`candidates`, an index tensor). Two can
+        mate if they are in the same mate_range-wide square of the world and their colours differ by
+        at most mate_color_range. Candidates are sorted by square and then colour, and each pairs with
+        the next one in that order, so similar colours pair first. Returns two index tensors of equal
+        length (each pair once); creatures left over have no mate this time."""
+        empty = candidates[:0]
+        if candidates.shape[0] < 2:
+            return empty, empty
+        pos = self.positions[candidates]
+        cells_per_side = int(self.cfg.size // self.cfg.mate_range) + 1
+        cell = (pos[:, 1] / self.cfg.mate_range).long() * cells_per_side + (pos[:, 0] / self.cfg.mate_range).long()
+        colors = self.colors[candidates]
+        order = torch.argsort(cell.double() * 256.0 + colors.double())   # colours are in [1, 255]
+        cell, colors, cands = cell[order], colors[order], candidates[order]
+
+        # rank within each square: position minus the index where that square's run starts
+        n = cands.shape[0]
+        idx = torch.arange(n, device=self.device)
+        new_run = torch.ones(n, dtype=torch.bool, device=self.device)
+        new_run[1:] = cell[1:] != cell[:-1]
+        run_start = torch.cummax(torch.where(new_run, idx, torch.zeros_like(idx)), dim=0).values
+        rank = idx - run_start
+
+        first = idx[:-1][(rank[:-1] % 2 == 0)]     # each even-ranked creature pairs with the next one,
+        second = first + 1                         # if it is in the same square and close in colour
+        ok = (cell[first] == cell[second]) & ((colors[second] - colors[first]).abs() <= self.cfg.mate_color_range)
+        return cands[first[ok]], cands[second[ok]]
 
     def eat_grow(self, food_grid: Tensor, state: GameState, capacity_mult: Tensor | None = None):
         """Compute how much food each creature eats, by taking a fixed percentage of the available

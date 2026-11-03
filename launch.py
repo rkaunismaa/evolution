@@ -24,6 +24,8 @@ if __name__ == '__main__':
                         help='Override max_creatures from the chosen config (GPU memory scales linearly with it)')
     parser.add_argument('--food_types', type=int, default=None,
                         help='Number of food types; creature colour picks which one each eats (new games only)')
+    parser.add_argument('--sexual', action='store_true',
+                        help='Sexual reproduction: nearby, similarly coloured creatures pair up (new games only)')
 
     benchmark_opts = parser.add_argument_group('Benchmarking options')
     benchmark_opts.add_argument('--style', choices=['nsys', 'torch-profile', 'cuda-events', 'tune-hyperparams'],
@@ -58,6 +60,8 @@ if __name__ == '__main__':
 
     if args.food_types is not None:
         cfg.food_types = args.food_types
+    if args.sexual:
+        cfg.sexual_reproduction = 1
 
     if args.seed >= 0:
         torch.random.manual_seed(args.seed)

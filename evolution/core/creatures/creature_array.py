@@ -67,12 +67,37 @@ class CreatureArray:
             v.init.mut_idx = self.num_mutable
             self.num_mutable += 1
 
+    def crossover_masks(self, num: int) -> Dict[str, Tensor]:
+        """For each mutable trait, a boolean mask of which values a child takes from its partner
+        parent (True) rather than from the reproducing parent. Brain layers (traits weights_i
+        [in, out] and biases_i [1, out]) share one [num, 1, out] mask per layer, so each neuron's
+        incoming weights and bias come whole from one parent: averaging or mixing the weights within a
+        neuron tends to break it. Other traits mix per element of their first dimension (e.g. per
+        ray), or per creature for scalars."""
+        masks: Dict[str, Tensor] = {}
+        layer_masks: Dict[str, Tensor] = {}
+        for name, v in self.variables.items():
+            if v.init.style != InitializerStyle.MUTABLE:
+                continue
+            kind, _, layer = name.rpartition('_')
+            if kind in ('weights', 'biases') and layer.isdigit():
+                if layer not in layer_masks:
+                    layer_masks[layer] = torch.rand((num, 1, v._shape[-1]), device=self.device) < 0.5
+                masks[name] = layer_masks[layer]
+            else:
+                shape = (num, *v._shape[:1], *([1] * max(len(v._shape) - 1, 0)))
+                masks[name] = torch.rand(shape, device=self.device) < 0.5
+        return masks
+
     @Profile.cuda_profile
     def reproduce_most(self, reproducers: Tensor, num_reproducers: int,
-                       children: 'CreatureArray', mut: Tensor):
+                       children: 'CreatureArray', mut: Tensor,
+                       partners: Tensor | None = None, masks: Dict[str, Tensor] | None = None):
         """Reproduce all traits that are mutable, force mutable, or fillable."""
+        masks = masks or {}
         for name, v in self.variables.items():   # handle mutable parameters
             child_trait = v.reproduce(name, self.rng, reproducers, num_reproducers, mut,
+                                      partners, masks.get(name),
                                       nsys_extra=name)   # type: ignore
             if child_trait is not None:
                 children.register_trait(name, child_trait)
@@ -91,7 +116,8 @@ class CreatureArray:
 
 
     @Profile.cuda_profile
-    def reproduce_traits(self, mut: Tensor, reproducers: Tensor, num_reproducers: int) -> 'CreatureArray':
+    def reproduce_traits(self, mut: Tensor, reproducers: Tensor, num_reproducers: int,
+                         partners: Tensor | None = None) -> 'CreatureArray':
         """Generate descendant traits from the set of indices in reproducers and store it in
         a new CreatureArray.
 
@@ -99,10 +125,13 @@ class CreatureArray:
             mut: mutation rates for each mutable trait.
             reproducers: An index tensor (into current memory) of creatures that are reproducing.
             num_reproducers: The number of creatures that are reproducing.
+            partners: optional index Tensor of each reproducer's mate (sexual reproduction): mutable
+                traits are then a random mix of both parents (see crossover_masks).
         """
         self.rng.generate(num_reproducers)
         children = CreatureArray(self.cfg, self.device)
-        self.reproduce_most(reproducers, num_reproducers, children, mut)
+        masks = self.crossover_masks(num_reproducers) if partners is not None else {}
+        self.reproduce_most(reproducers, num_reproducers, children, mut, partners, masks)
         # we can pretend position is a mutable parameter since it is a random deviation from the parent
         self.reproduce_extra(children)
         return children

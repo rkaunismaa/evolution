@@ -174,6 +174,15 @@ class Config:
     reproduce_thresh: ConfigFunction = ConfigFunction('square_add', 11., 1.0)  # func(size) to determine the energy threshold for reproduction
     reproduce_energy_loss_frac: float = 15.  # factor to divide energy by after reproducing (and subtracting off init_energy costs)
     reproduce_dist: float = 3.  # standard deviation of distance from parent to place offspring
+    # 1 = sexual reproduction: creatures that are ready to reproduce pair up with a mate in the same
+    # mate_range-wide square of the world whose colour is within mate_color_range. Each pair has two
+    # children, one paid for by (and placed near) each parent. A child's brain takes each neuron (its
+    # incoming weights and bias) whole from one parent or the other, and every other inherited trait
+    # element from either parent at random, before mutation. Creatures without a mate wait.
+    # 0 = asexual: each ready creature has one mutated copy of itself (the original behaviour)
+    sexual_reproduction: int = 0
+    mate_range: float = 50.0  # 20 left the population mate-limited for ~12,000 steps on the large preset
+    mate_color_range: float = 20.0
 
     ### Aging
 
