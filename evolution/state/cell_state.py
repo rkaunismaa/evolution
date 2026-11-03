@@ -41,13 +41,19 @@ class CellState:
             self.prev_food = self.world.food_grid[self._selected_cell[1] + self.pad,
                                        self._selected_cell[0] + self.pad].item()
 
-    def extract_post_grow_state(self, pct_eaten: Tensor, food_grid_updates: Tensor, step_size: float):
+    def extract_post_grow_state(self, pct_eaten: Tensor, food_grid_updates: Tensor, step_size: float,
+                                positions: Tensor):
+        """`positions` is the [N, 2] padded integer cell of each creature, as passed to the eat kernel."""
         if self._selected_cell is not None:
-            self.cell_pct_eaten = pct_eaten[self._selected_cell[1] + self.pad,
-                                       self._selected_cell[0] + self.pad].item()
-            # this is also bad practice since we are calculating cover_cost twice (inside the grow.cu
+            x, y = self._selected_cell[0] + self.pad, self._selected_cell[1] + self.pad
+            self.cell_pct_eaten = pct_eaten[y, x].item()
+            # this is also bad practice since we are calculating cover_cost twice (inside the eat.cu
             # CUDA kernel and here), but there's no way to avoid it without allocating a ton of memory
-            self.cover_cost = self.cfg.food_cover_decr_pct * self.cfg.food_cover_decr * self.cell_pct_eaten
+            if self.cfg.food_cover_scaled:
+                self.cover_cost = self.cfg.food_cover_decr_pct * self.cfg.food_cover_decr * self.cell_pct_eaten
+            else:   # older games: a flat food_cover_decr for every creature in the cell
+                n_here = ((positions[:, 0] == x) & (positions[:, 1] == y)).sum().item()
+                self.cover_cost = self.cfg.food_cover_decr * n_here
             self.eaten_amt = food_grid_updates[self._selected_cell[1] + self.pad,
                                           self._selected_cell[0] + self.pad].item() - self.cover_cost
             self.post_growth_food = self.world.food_grid[self._selected_cell[1] + self.pad,

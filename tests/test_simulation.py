@@ -244,3 +244,29 @@ def test_birth_death_rates_are_per_step_since_last_call(make_world):
     rates = world.birth_death_rates()
     steps = world.state.time - t0
     np.testing.assert_allclose(rates, [(c.n_births - b0) / steps, (c.n_deaths - d0) / steps])
+
+
+@pytest.mark.parametrize("scaled", [0, 1], ids=["flat-cost", "scaled-cost"])
+def test_cell_panel_cover_cost_matches_eat_kernel(make_world, scaled):
+    """The cell panel's cover cost must be the amount the eat kernel actually removes from the cell."""
+    world = make_world(size=40, food_cover_scaled=scaled, food_cover_decr=0.2)   # crowded cells
+    c, cfg, p = world.creatures, world.cfg, world.creatures.pad
+    for _ in range(5):
+        world.step()
+    pos = c.positions.data.int()
+    cells, counts = torch.unique(pos, dim=0, return_counts=True)
+    x, y = cells[counts.argmax()].tolist()          # the most crowded cell
+    assert counts.max() > 1
+    world.state.selected_cell.set_cell((x, y))
+    in_cell = (pos[:, 0] == x) & (pos[:, 1] == y)
+    eat_pcts = c.eat_pcts.data[in_cell].clone()
+    world.state.time += 1                            # eat directly: a full step would move creatures first
+    c.eat_grow(world.food_grid, world.state, world.food_capacity)
+    panel = world.state.selected_cell
+    assert panel.update_state_available
+    if scaled:
+        expected = (cfg.food_cover_decr * cfg.food_cover_decr_pct * eat_pcts).sum().item()
+    else:
+        expected = cfg.food_cover_decr * in_cell.sum().item()
+    assert panel.cover_cost == pytest.approx(expected, rel=1e-4)
+    assert panel.eaten_amt >= -1e-6

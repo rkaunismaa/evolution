@@ -319,7 +319,7 @@ class Creatures:
             flat = food_grid.view(-1)
             flat[touched] = flat[touched] - food_grid_updates.view(-1)[touched]
 
-        state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size)
+        state.selected_cell.extract_post_grow_state(pct_eaten, food_grid_updates, step_size, pos)
         state.selected_creature.extract_post_eat_state(pos, alive_costs)
 
         pct_eaten.view(-1).index_fill_(0, touched, 0.)
