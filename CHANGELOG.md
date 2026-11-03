@@ -139,7 +139,18 @@ Test runs on the `large` preset with three foods:
 | Growth 1.0, 262,144 cap, 40,000 steps | Fell to 3,734 by step 2,500, at the cap by step 10,000 | 2,755 / 2,701 / 2,736 → 103,321 / 91,812 / 67,011 → 93,766 / 83,012 / 85,366 | 6.9 / 7.3 / 7.3 |
 
 - **The species co-exist and balance each other.** With scarce food, the largest species held the least food per cell and lost ground, so the smallest species grew from 26% to 33% of the population.
-- **Each type grows at the full rate, so `T` types put `T` times as much food in the world.** With one food at growth 1.0, food limited the population until about step 30,000; with three foods, only until between steps 7,500 and 10,000. To keep total food the same, divide `max_food` (or the growth rate) by `T`. This is not done automatically.
+- **Each type grows at the full rate, so `T` types put `T` times as much food in the world.** To keep total food the same, divide `max_food` by `T`; this is not done automatically. The comparison below shows why it matters.
+
+Same settings (growth 1.0, cap 262,144, 40,000 steps, `food_sight=2`):
+
+| | One food, `max_food` 15 | Three foods, `max_food` 15 | Three foods, `max_food` 5 (same total food) |
+| --- | --- | --- | --- |
+| Lowest population | 2,902 | 3,734 | 1,323 |
+| When food limits the population | Steps ~15,000–25,000; at the cap otherwise after step 10,000 | Until steps 7,500–10,000, then at the cap | All 40,000 steps (138,269 at the end) |
+| Creatures per type at the end | 262,144 | 93,766 / 83,012 / 85,366 | 33,522 / 45,815 / 58,932 |
+| Mean food at the end | 3.5 of 15 | 6.9–7.3 of 15 | 3.5–3.7 of 5 |
+
+With shared food the species compete for the whole run and the lead changes hands: type 2 held up to 51% of creatures (step 22,500), and type 3 overtook it after step 35,000.
 - Default-growth runs stay limited by the cap, so the species barely compete there.
 
 ### Navigation experiments (no code changes)
