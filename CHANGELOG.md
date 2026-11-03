@@ -6,8 +6,11 @@ The `large` preset now gives creatures a 5×5 food view instead of 9×9 (`food_s
 
 The cell info panel now shows the right food-cover cost in games saved before `food_cover_scaled` existed.
 
+Species-specific food is built and off by default: `food_types` (or `--food_types` for a new game) splits colours into that many bands, and each band eats, sees and leaves behind only its own food. In a 40,000-step test with three foods, all three species survived and their numbers evened out.
+
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `33c6f6b` | New `food_types` option and `--food_types` flag: several food grids, one per colour band | README planned feature: species-specific food, so different niches can co-exist |
 | 2026-11-03 | `d402813` | Cell panel shows the flat food-cover cost in older games; new test checks the panel against the eat kernel | The panel always showed the scaled cost, so its cover, eaten and growth amounts were wrong for those games |
 | 2026-11-03 | `9e91182` | `food_sight=2` in the `large` preset; first brain layer 130 → 74 inputs | Blinding food vision changed nothing over 60,000 steps, and the view was 62% of the first layer's weights |
 
@@ -117,6 +120,27 @@ The two fixed-position plot windows are replaced by one movable, resizable **Plo
 
 Each new plot has a tracker saved in checkpoints. Births and deaths are counted on the CPU from values the simulation already has, and the new trackers cost no measurable speed. Which plots are shown is not saved between sessions.
 
+### Species-specific food (`33c6f6b`)
+
+`food_types=T` stores the food as one `[T, S, S]` grid. A creature's colour (1–255) picks its type: the colours are split into `T` equal bands, so similarly coloured creatures, which already do little damage to each other, share a food.
+
+- **Eating, vision and death** use only the creature's own food, so the brain inputs do not change.
+- **Each type grows independently**, with its own rich and poor land when `food_capacity_variation > 0`. The wave fields are uncorrelated between types.
+- **GUI:** the cell panel lists the food of each type and totals the per-step amounts. The creature panel shows which food the creature eats. The heatmap shows the selected creature's food, or the mean over all types.
+- **Checkpoints** save the grid as `[T·S, S]` so that quantization keeps one scale per column. Older saves load as one food type.
+- **Cost on the `large` preset:** with one type, behaviour matches the previous code to float rounding and step time is unchanged (3.85 ms). Three types take 4.59 ms per step and 0.9 GiB more memory.
+
+Test runs on the `large` preset with three foods:
+
+| Setting | Population | Creatures per type (start → 10,000 → 40,000 steps) | Mean food per type at the end (max 15) |
+| --- | --- | --- | --- |
+| Default growth, 131,072 cap, 30,000 steps | At the cap from step 2,500 | 2,755 / 2,701 / 2,736 → 45,143 / 45,278 / 40,651 → 47,557 / 45,006 / 38,509 (at 30,000) | 14.3 / 14.3 / 14.4 |
+| Growth 1.0, 262,144 cap, 40,000 steps | Fell to 3,734 by step 2,500, at the cap by step 10,000 | 2,755 / 2,701 / 2,736 → 103,321 / 91,812 / 67,011 → 93,766 / 83,012 / 85,366 | 6.9 / 7.3 / 7.3 |
+
+- **The species co-exist and balance each other.** With scarce food, the largest species held the least food per cell and lost ground, so the smallest species grew from 26% to 33% of the population.
+- **Each type grows at the full rate, so `T` types put `T` times as much food in the world.** With one food at growth 1.0, food limited the population until about step 30,000; with three foods, only until between steps 7,500 and 10,000. To keep total food the same, divide `max_food` (or the growth rate) by `T`. This is not done automatically.
+- Default-growth runs stay limited by the cap, so the species barely compete there.
+
 ### Navigation experiments (no code changes)
 
 Measurements on the `large` preset with `food_capacity_variation=0.5`, to see whether creatures evolve to seek food. "Control" shuffles move and rotate outputs between creatures each step, so movement cannot depend on what a creature senses; "food-blind" shuffles each creature's 9×9 food view with another creature's, so food vision carries no information.
@@ -142,13 +166,14 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (50 tests, about 12 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (69 tests, about 16 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
-| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map); scratch buffers re-zeroed; colour mapping |
+| `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map, one and three food types); scratch buffers re-zeroed; colour mapping |
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
+| `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues

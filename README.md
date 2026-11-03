@@ -85,6 +85,8 @@ python3 ./launch.py
 
 The game starts paused; press space to run it, or pass `--run` to start it running.
 
+Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
+
 Simulation parameters can be modified by opening launch.py, and changing the `evolution.core.config.Config` object. Documentation for all supported parameters are outlined in `evolution/core/config.py`.
 
 To do nsys-style benchmarking, use the following command:
@@ -137,7 +139,7 @@ Rough estimates for one developer familiar with the codebase. A large hidden cos
 
 **Plot manager.** Window positions are computed by hand from fixed widths and resizing is disabled. Switching to imgui docking (supported by `imgui_bundle`) would fix this. Best done before adding more plots.
 
-**Species-specific food.** Use several food grids, with a creature's color or a new mutable trait choosing which one it eats. Touches the eat and grow kernels, the heatmap, and the checkpoint format (old checkpoints need migration). Each extra food type adds 25 brain inputs at the `large` preset's `food_sight=2`; with 3 types the first layer grows from 74 to 124 inputs, about 1.7× the per-creature brain memory. Letting each creature see only the food type it eats avoids this. Works best after non-uniform growth so niches are spatially separated.
+**Species-specific food.** *Built 2026-11-03 as `food_types` (off by default; see `CHANGELOG.md`): colour bands choose the food, each creature sees only its own, and each type has its own rich land.* Use several food grids, with a creature's color or a new mutable trait choosing which one it eats. Touches the eat and grow kernels, the heatmap, and the checkpoint format (old checkpoints need migration). Each extra food type adds 25 brain inputs at the `large` preset's `food_sight=2`; with 3 types the first layer grows from 74 to 124 inputs, about 1.7× the per-creature brain memory. Letting each creature see only the food type it eats avoids this. Works best after non-uniform growth so niches are spatially separated.
 
 **Sexual reproduction.**
 - *Mate finding on the GPU:* reuse the cell grid from attacks/vision, define compatibility (both mature, enough energy, similar color), and prevent a creature mating more than once per step (e.g. claiming partners atomically).
