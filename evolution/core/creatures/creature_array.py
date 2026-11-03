@@ -73,11 +73,16 @@ class CreatureArray:
         [in, out] and biases_i [1, out]) share one [num, 1, out] mask per layer, so each neuron's
         incoming weights and bias come whole from one parent: averaging or mixing the weights within a
         neuron tends to break it. Other traits mix per element of their first dimension (e.g. per
-        ray), or per creature for scalars."""
+        ray), or per creature for scalars.
+
+        mutation_rates get no mask: a child inherits them whole from the reproducing parent. Mixed
+        mutation rates are no longer tied to the lineage whose genes they protect, so selection stops
+        holding them down: on the large preset they rose about 9x within 20,000 steps and nearly
+        tripled the death rate (see CHANGELOG)."""
         masks: Dict[str, Tensor] = {}
         layer_masks: Dict[str, Tensor] = {}
         for name, v in self.variables.items():
-            if v.init.style != InitializerStyle.MUTABLE:
+            if v.init.style != InitializerStyle.MUTABLE or name == 'mutation_rates':
                 continue
             kind, _, layer = name.rpartition('_')
             if kind in ('weights', 'biases') and layer.isdigit():

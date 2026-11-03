@@ -54,6 +54,7 @@ def test_crossover_masks_keep_neurons_whole(make_world):
     assert masks['sizes'].shape == (16,)
     assert masks['rays'].shape == (16, world.cfg.num_rays, 1)          # whole rays
     assert 'positions' not in masks                                  # children sit near the paying parent
+    assert 'mutation_rates' not in masks                             # inherited whole from the paying parent
 
 
 def test_children_take_each_neuron_from_one_parent(make_world):
@@ -79,6 +80,7 @@ def test_children_take_each_neuron_from_one_parent(make_world):
     assert from_father_somewhere
     ks = kids.variables['sizes'].data
     assert ((ks == c.sizes.data[mothers]) | (ks == c.sizes.data[fathers])).all()
+    assert torch.equal(kids.variables['mutation_rates'].data, c.mutation_rates.data[mothers])
 
 
 def test_each_pair_has_two_children_paid_for_by_each_parent(make_world):

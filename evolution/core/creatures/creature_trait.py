@@ -121,7 +121,7 @@ class CreatureTrait:
         child = CreatureTrait(self._shape, self.init, self.normalize_func, self.device)
         perturb = rng.fetch_params(name) * mut
         inherited = self[reproducers]
-        if partners is not None:
+        if partners is not None and mask is not None:   # no mask: inherited from the reproducer only
             inherited = torch.where(mask, self[partners], inherited)
         child.data = inherited + perturb
         child.normalize()
