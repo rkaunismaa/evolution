@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-03
+
+The `large` preset now gives creatures a 5×5 food view instead of 9×9 (`food_sight` 4 → 2), because the navigation experiments showed they were not using it. At 131,072 creatures this lowers peak GPU memory from 3.09 to 2.27 GiB and step time from 5.05 to 3.82 ms on an RTX 4090. Saved games keep the `food_sight` they were made with, so the saving applies only to new games.
+
+| Date | Commit | What changed | Why |
+| --- | --- | --- | --- |
+| 2026-11-03 | `9e91182` | `food_sight=2` in the `large` preset; first brain layer 130 → 74 inputs | Blinding food vision changed nothing over 60,000 steps, and the view was 62% of the first layer's weights |
+
 ## 2026-10-16 to 2026-10-27
 
 The `large` preset now fits on an 8 GB GPU, runs about 2× faster on an RTX 4090, the project has a unit test suite, new games use the documented food-cover cost, and the `large` preset has rich and poor regions of land. Three of the speed-ups change simulation behaviour slightly, so they are config options that default to the old behaviour and are switched on only in the `large` preset. Saved games keep the settings they were made with.
@@ -123,7 +131,7 @@ Measurements on the `large` preset with `food_capacity_variation=0.5`, to see wh
 | Creatures on rich land (14.6% of area) | 20% | swings 9–29% | 20% |
 
 - **Brains matter, food vision does not.** Shuffling movement is nearly fatal, but blinding food vision changes nothing, so the useful behaviour comes from other inputs (own energy, health, size, memory, or what the rays see). Likely reasons navigation has not evolved: neighbouring cells differ little (regions are ~250 cells wide, the view is 9×9), moving costs energy, and 60,000 steps allow relatively few generations.
-- **Trade-off to consider:** with `food_sight=4` the food view is 81 of each brain's 130 inputs (about 62% of the first layer's weights). `food_sight=1` (9 inputs) would roughly halve brain memory and cut brain evaluation, the largest GPU cost, by about a third, at the price of making navigation even harder to evolve.
+- **Trade-off (acted on 2026-11-03, `food_sight=2`):** with `food_sight=4` the food view is 81 of each brain's 130 inputs (about 62% of the first layer's weights). `food_sight=1` (9 inputs) would roughly halve brain memory and cut brain evaluation, the largest GPU cost, by about a third, at the price of making navigation even harder to evolve.
 
 ### Crash fix (`4e1fbc9`)
 
