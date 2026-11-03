@@ -87,6 +87,8 @@ The game starts paused; press space to run it, or pass `--run` to start it runni
 
 Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. The types share the world's food, so each grows towards `max_food / food_types` (set `food_types_share=0` in the config for the full `max_food` each). With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
 
+Pass `--sexual` to start a new game with sexual reproduction: creatures ready to reproduce pair with a nearby, similarly coloured mate, and each pair has two children whose brains take each neuron from one parent or the other.
+
 Simulation parameters can be modified by opening launch.py, and changing the `evolution.core.config.Config` object. Documentation for all supported parameters are outlined in `evolution/core/config.py`.
 
 To do nsys-style benchmarking, use the following command:
@@ -141,7 +143,7 @@ Rough estimates for one developer familiar with the codebase. A large hidden cos
 
 **Species-specific food.** *Built 2026-11-03 as `food_types` (off by default; see `CHANGELOG.md`): colour bands choose the food, each creature sees only its own, and each type has its own rich land.* Use several food grids, with a creature's color or a new mutable trait choosing which one it eats. Touches the eat and grow kernels, the heatmap, and the checkpoint format (old checkpoints need migration). Each extra food type adds 25 brain inputs at the `large` preset's `food_sight=2`; with 3 types the first layer grows from 74 to 124 inputs, about 1.7× the per-creature brain memory. Letting each creature see only the food type it eats avoids this. Works best after non-uniform growth so niches are spatially separated.
 
-**Sexual reproduction.**
+**Sexual reproduction.** *Built 2026-11-03 as `sexual_reproduction` (off by default; see `CHANGELOG.md`): mates are found by sorting ready creatures by area and colour, and children take whole neurons from either parent.*
 - *Mate finding on the GPU:* reuse the cell grid from attacks/vision, define compatibility (both mature, enough energy, similar color), and prevent a creature mating more than once per step (e.g. claiming partners atomically).
 - *Combining parents:* `reproduce_mutable` in `creature_trait.py` mutates a single parent; it needs a second parent and a crossover rule. Averaging network weights tends to produce worse brains, so swapping whole neurons is preferable.
 - *Energy:* split the reproduction cost between both parents.

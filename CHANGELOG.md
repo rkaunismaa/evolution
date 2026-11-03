@@ -10,8 +10,11 @@ Species-specific food is built and off by default: `food_types` (or `--food_type
 
 A mass extinction now ends the game with the "Mass extinction!" message instead of crashing.
 
+Sexual reproduction is built and off by default (`sexual_reproduction`, or `--sexual` for a new game): nearby, similarly coloured creatures pair up, and their children mix the parents' traits, taking whole brain neurons from one parent or the other.
+
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `6156b8b` | New `sexual_reproduction` option and `--sexual` flag: mates by area and colour, two children per pair, whole-neuron crossover | README planned feature: sexual reproduction |
 | 2026-11-03 | `709ef93` | New `food_types_share` option, on by default: each type grows towards `max_food / food_types` | Without it, extra types added food and the species barely competed (see the comparison below) |
 | 2026-11-03 | `f4f69b7` | Fix crash when every creature dies in one step; `step()` reports the extinction | The block-moving code sliced `csum[:-0]`, an empty tensor; the original `conv1d` failed too |
 | 2026-11-03 | `990e858` | Plots window kept inside the game window | A layout saved on a larger screen opened it partly off-screen |
@@ -157,6 +160,30 @@ Same settings (growth 1.0, cap 262,144, 40,000 steps, `food_sight=2`):
 With shared food the species compete for the whole run and the lead changes hands: type 2 held up to 51% of creatures (step 22,500), and type 3 overtook it after step 35,000.
 - Default-growth runs stay limited by the cap, so the species barely compete there.
 
+### Sexual reproduction (`6156b8b`)
+
+With `sexual_reproduction=1`, creatures that are ready to reproduce (mature, with enough energy) look for a mate:
+
+1. **Finding mates:** candidates are sorted by which `mate_range`-wide square of the world they are in (default 50), then by colour. Each one pairs with the next in that order if both are in the same square and their colours differ by at most `mate_color_range` (default 20). Every creature mates at most once per round, and the code is plain PyTorch with no new kernel.
+2. **Children:** each pair has two. Each parent pays for one, as in asexual reproduction, and that child starts near it. If there is room for fewer children, a random subset of pairs breeds.
+3. **Crossover:** a child's brain takes each neuron, meaning its incoming weights and its bias, whole from one parent; averaging weights tends to produce broken brains. Other inherited traits mix per element (whole rays, single values for size and colour), and then mutate with the paying parent's mutation rates.
+4. **No mate:** the creature keeps its energy and tries again next round.
+
+The asexual path is unchanged, and older saves keep reproducing asexually.
+
+Test runs on the `large` preset, 30,000 steps, seed 0:
+
+| | Asexual | Mate range 20 | Mate range 50 (default) | Mate range 100 |
+| --- | --- | --- | --- | --- |
+| Population at step 5,000 | 131,072 (cap) | 21,667 | 54,983 | 131,072 (cap) |
+| At the cap from | by step 5,000 | step 10,000–15,000 | step 5,000–10,000 | by step 5,000 |
+| Births by step 30,000 | 1.53 M | 4.14 M | 4.66 M | 3.75 M |
+| Mean creature size at the end | 0.72 | 0.71 | 0.84 | 0.88 |
+
+- **Early on, finding a mate is the bottleneck.** While the population is small, ready creatures are spread thin. With range 20, about 1,600 creatures were ready per round at step 10,000, but only about 240 pairs formed.
+- **At the cap, births are 2.5–3 times the asexual rate.** Births only replace deaths there, so creatures die younger. The cause has not been measured yet; weaker crossover children are one possibility.
+- **Creatures evolve larger** with ranges 50 and 100.
+
 ### Navigation experiments (no code changes)
 
 Measurements on the `large` preset with `food_capacity_variation=0.5`, to see whether creatures evolve to seek food. "Control" shuffles move and rotate outputs between creatures each step, so movement cannot depend on what a creature senses; "food-blind" shuffles each creature's 9×9 food view with another creature's, so food vision carries no information.
@@ -182,7 +209,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (74 tests, about 17 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (82 tests, about 18 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
@@ -190,6 +217,7 @@ Run with `python3 -m pytest` (74 tests, about 17 s on an RTX 4090; GPU tests are
 | `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map, one and three food types); scratch buffers re-zeroed; colour mapping |
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
 | `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals, shared and full food per type |
+| `tests/test_sexual_reproduction.py` | Mate finding (same square, close colour, at most one mate each), whole-neuron crossover masks and children, two children per pair with each parent paying, waiting without a mate, 200-step invariants, older configs staying asexual |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
