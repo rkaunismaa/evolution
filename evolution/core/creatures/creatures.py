@@ -323,7 +323,7 @@ class Creatures:
                                food_grid.shape[0])   # one z-block per food type
 
             self.kernels('grow', blocks_per_grid, threads_per_block,
-                         food_grid_updates, food_grid, n_cells, self.pad, step_size, self.cfg.max_food,
+                         food_grid_updates, food_grid, n_cells, self.pad, step_size, self.cfg.max_food_per_type(),
                          capacity_mult if capacity_mult is not None else 0)   # 0 = null pointer
         else:
             # no growth this step: just apply the eating updates, which are only at creatures' cells

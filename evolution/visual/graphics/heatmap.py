@@ -79,7 +79,7 @@ class Heatmap(Subscriber):
 
     def _update(self):
         fgrid = self.shown_food_grid()
-        max_value = max(fgrid.max().item(), self.cfg.max_food)
+        max_value = max(fgrid.max().item(), self.cfg.max_food_per_type())
         min_value = min(fgrid.min().item(), -2.)
         # print(min_value, t.unravel_index(fgrid.argmin(), fgrid.shape))
         # self.prog['minVal'] = min_value

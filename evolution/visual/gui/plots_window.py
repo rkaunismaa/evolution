@@ -28,7 +28,7 @@ class PlotsWindow(Window):
             LinePlot('Energy over time', [Series('Energy', s.energy_tracker)], 'log10(Energy)'),
             HistogramPlot(world, state, default_open=False),
             LinePlot('Mean food level', [Series('Food', s.food_tracker)], 'Food per cell',
-                     hlines=[('Max food', float(cfg.max_food))], default_open=False),
+                     hlines=[('Max food', float(cfg.max_food_per_type()))], default_open=False),
             LinePlot('Mean size and age', [Series('Size', s.size_tracker),
                                            Series('Age', s.age_tracker, right_axis=True)],
                      'Size', y2_label='Age (steps)', default_open=False),

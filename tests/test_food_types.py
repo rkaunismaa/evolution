@@ -73,7 +73,8 @@ def test_each_type_has_its_own_rich_land(make_world):
 
 
 def test_invariants_with_three_foods(make_world):
-    world = make_world(food_types=3, food_capacity_variation=0.5, food_capacity_scale=25.0,
+    # full food per type: this small world goes extinct when three types share one type's food
+    world = make_world(food_types=3, food_types_share=0, food_capacity_variation=0.5, food_capacity_scale=25.0,
                        kill_reproduce_every=4, brain_dtype='float16', food_grow_every=4,
                        food_capacity_change_steps=300, food_capacity_update_every=10)
     p = world.creatures.pad
@@ -138,3 +139,37 @@ def test_cell_panel_totals_over_food_types(make_world, scaled):
     assert panel.cover_cost == pytest.approx(expected, rel=1e-4)
     assert len(panel.foods) == 3
     assert panel.food == pytest.approx(sum(panel.foods))
+
+
+@pytest.mark.parametrize("share", [1, 0], ids=["shared", "full"])
+def test_food_types_share_the_worlds_food(make_world, share):
+    """Shared (the default): each type grows towards max_food / food_types, so total food matches one
+    type. Unshared: every type grows towards the full max_food."""
+    world = make_world(food_types=3, food_types_share=share, food_step_size=0.02, food_cover_decr=0.0)
+    c, p = world.creatures, world.creatures.pad
+    per_type = world.cfg.max_food / 3 if share else world.cfg.max_food
+    assert world.cfg.max_food_per_type() == pytest.approx(per_type)
+    assert world.food_grid.max() <= world.cfg.init_food_scale * (1 / 3 if share else 1)   # initial food too
+    c.positions.data[:] = 1.0              # park everyone in one corner cell
+    c.eat_pcts.data[:] = 0.0               # and stop them eating
+    for _ in range(60):
+        world.state.time += 1
+        c.eat_grow(world.food_grid, world.state, world.food_capacity)
+    food = world.food_grid[:, p + 5:-p, p + 5:-p]
+    assert food.mean().item() == pytest.approx(per_type, rel=0.02)
+
+
+def test_one_food_type_is_unaffected_by_sharing(make_world):
+    assert make_world(food_types=1, food_types_share=1).cfg.max_food_per_type() == 15.0
+
+
+def test_older_configs_share_by_default():
+    """Configs pickled before food_types_share existed fall back to the class default (shared)."""
+    import pickle
+    from evolution.core.config import Config
+    cfg = Config(food_types=3)
+    del cfg.__dict__['food_types_share']
+    old = pickle.loads(pickle.dumps(cfg))
+    assert old.max_food_per_type() == pytest.approx(5.0)
+    del cfg.__dict__['food_types']      # and from before food_types: one full food
+    assert pickle.loads(pickle.dumps(cfg)).max_food_per_type() == 15.0

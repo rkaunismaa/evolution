@@ -49,7 +49,8 @@ def _reference_eat_grow(world, grow=True, step_mult=1, capacity=None):
 
     # grow (padding untouched)
     f = food_grid.view(-1) - updates
-    cap = cfg.max_food if capacity is None else cfg.max_food * capacity.view(-1)
+    m = cfg.max_food_per_type()
+    cap = m if capacity is None else m * capacity.view(-1)
     growth = cfg.food_step_size * step_mult * (cap - f)
     f = torch.where(f < 0, f + growth * cfg.food_recovery_rate,
                     torch.where(f > cap, f + growth * cfg.food_decay_rate,

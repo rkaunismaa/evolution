@@ -24,7 +24,8 @@ class GWorld():
         self.device = device
         self.path = path
         # [food_types, S, S]: one grid per food type (see Config.food_types)
-        self.food_grid = torch.rand((self.n_food_types, cfg.size, cfg.size), device=self.device) * cfg.init_food_scale
+        self.food_grid = (torch.rand((self.n_food_types, cfg.size, cfg.size), device=self.device)
+                          * (cfg.init_food_scale * cfg.food_type_share()))
         # pad with zeros on all sides
         self.food_grid = F.pad(self.food_grid, (cfg.food_sight,)*4, mode='constant', value=0)
         # per-cell max_food multiplier (rich and poor land), or None for uniform capacity

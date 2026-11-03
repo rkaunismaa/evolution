@@ -104,6 +104,10 @@ class Config:
     # bands. Each type grows independently, with its own rich and poor land when
     # food_capacity_variation > 0. 1 = a single food shared by everyone
     food_types: int = 1
+    # 1 = the food types share the world's food: max_food and init_food_scale are totals over all
+    # types, so each type grows towards max_food / food_types and the world holds as much food as
+    # with one type (species then compete for it). 0 = every type gets the full max_food
+    food_types_share: int = 1
 
 
     ### Creatures
@@ -195,6 +199,15 @@ class Config:
     ### Game Settings
 
     max_game_speed: int = 1000 # maximum game speed (steps per frame)
+
+    def food_type_share(self) -> float:
+        """Fraction of max_food (and init_food_scale) that each food type gets."""
+        n_types = getattr(self, 'food_types', 1)
+        return 1.0 / n_types if getattr(self, 'food_types_share', 1) else 1.0
+
+    def max_food_per_type(self) -> float:
+        """The food level each cell of each food type grows towards (before the capacity map)."""
+        return self.max_food * self.food_type_share()
 
     def update_in_place(self, other: 'Config' | Dict[str, Any]) -> 'Config':
         if isinstance(other, dict):
