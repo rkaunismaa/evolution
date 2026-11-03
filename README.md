@@ -85,7 +85,7 @@ python3 ./launch.py
 
 The game starts paused; press space to run it, or pass `--run` to start it running.
 
-Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
+Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. The types share the world's food, so each grows towards `max_food / food_types` (set `food_types_share=0` in the config for the full `max_food` each). With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
 
 Simulation parameters can be modified by opening launch.py, and changing the `evolution.core.config.Config` object. Documentation for all supported parameters are outlined in `evolution/core/config.py`.
 

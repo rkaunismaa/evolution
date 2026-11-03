@@ -6,10 +6,14 @@ The `large` preset now gives creatures a 5×5 food view instead of 9×9 (`food_s
 
 The cell info panel now shows the right food-cover cost in games saved before `food_cover_scaled` existed.
 
-Species-specific food is built and off by default: `food_types` (or `--food_types` for a new game) splits colours into that many bands, and each band eats, sees and leaves behind only its own food. In a 40,000-step test with three foods, all three species survived and their numbers evened out.
+Species-specific food is built and off by default: `food_types` (or `--food_types` for a new game) splits colours into that many bands, and each band eats, sees and leaves behind only its own food. The types share the world's food (`food_types_share=1`, the default), so species compete for it: in a 40,000-step test all three survived, food limited the population throughout, and the lead changed hands.
+
+A mass extinction now ends the game with the "Mass extinction!" message instead of crashing.
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-03 | `709ef93` | New `food_types_share` option, on by default: each type grows towards `max_food / food_types` | Without it, extra types added food and the species barely competed (see the comparison below) |
+| 2026-11-03 | `f4f69b7` | Fix crash when every creature dies in one step; `step()` reports the extinction | The block-moving code sliced `csum[:-0]`, an empty tensor; the original `conv1d` failed too |
 | 2026-11-03 | `990e858` | Plots window kept inside the game window | A layout saved on a larger screen opened it partly off-screen |
 | 2026-11-03 | `33c6f6b` | New `food_types` option and `--food_types` flag: several food grids, one per colour band | README planned feature: species-specific food, so different niches can co-exist |
 | 2026-11-03 | `d402813` | Cell panel shows the flat food-cover cost in older games; new test checks the panel against the eat kernel | The panel always showed the scaled cost, so its cover, eaten and growth amounts were wrong for those games |
@@ -139,7 +143,7 @@ Test runs on the `large` preset with three foods:
 | Growth 1.0, 262,144 cap, 40,000 steps | Fell to 3,734 by step 2,500, at the cap by step 10,000 | 2,755 / 2,701 / 2,736 → 103,321 / 91,812 / 67,011 → 93,766 / 83,012 / 85,366 | 6.9 / 7.3 / 7.3 |
 
 - **The species co-exist and balance each other.** With scarce food, the largest species held the least food per cell and lost ground, so the smallest species grew from 26% to 33% of the population.
-- **Each type grows at the full rate, so `T` types put `T` times as much food in the world.** To keep total food the same, divide `max_food` by `T`; this is not done automatically. The comparison below shows why it matters.
+- **Shared food (`709ef93`):** at first each type grew at the full rate, so `T` types put `T` times as much food in the world. Now, by default (`food_types_share=1`), `max_food` and `init_food_scale` are totals, and each type grows towards `max_food / T`. Set `food_types_share=0` for the full `max_food` per type. The comparison below led to this default.
 
 Same settings (growth 1.0, cap 262,144, 40,000 steps, `food_sight=2`):
 
@@ -178,14 +182,14 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (69 tests, about 16 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (74 tests, about 17 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
 | `tests/test_creature_array.py` | Every creature's traits stay together through births and deaths for all three packing strategies, a random run of updates, the selected creature, and the crash case |
 | `tests/test_kernels.py` | Eat and food-growth kernels against a plain-PyTorch reference (normal, crowded, batched growth, flat and scaled cover cost, capacity map, one and three food types); scratch buffers re-zeroed; colour mapping |
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
-| `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals |
+| `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals, shared and full food per type |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
