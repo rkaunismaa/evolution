@@ -2,10 +2,11 @@
 
 ## 2026-11-04
 
-Lifetime learning is built and off by default (`lifetime_learning`, or `--learning` for a new game), but in its current form it makes creatures worse, and evolution pushes it down. Plain evolution, measured properly for the first time, does move creatures towards food.
+Lifetime learning is built and off by default (`lifetime_learning`, or `--learning` for a new game). The first version, Hebbian learning, made creatures worse and evolution pushed it down. The current version, node perturbation, no longer hurts: in three seeds, creatures gained 3–5% more food per move than the same noise without learning. Plain evolution, measured properly for the first time, does move creatures towards food.
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-04 | `a3e2911` | Lifetime learning switches to node perturbation (exploration noise 0.1, move and rotate only, trace 0.9, limit 0.2); new `learning_noise`, `learning_outputs` and `learning_trace_decay` options | The Hebbian rule only reinforced what creatures already did, and made them worse |
 | 2026-11-04 | `7ce9036` | New `lifetime_learning` option and `--learning` flag: reward-modulated Hebbian learning in the brain's last layer, with an evolvable learning rate | README planned feature: RL, in its cheaper lifetime-learning form |
 
 ### Lifetime learning (`7ce9036`)
@@ -38,7 +39,34 @@ The neutral control has the learning-rate gene but learned weights clamped to 0,
   - learning also changes the memory outputs;
   - a ±1 limit is large next to the inherited weights, which start within about ±0.3.
 
-  None of these has been tested.
+  The fixes below tested each of these.
+
+**Fixing it (`a3e2911`).** Each suspect was tested on the same setup, then a different rule was tried:
+
+| Last 10,000 of 40,000 steps, seed 0 | Food gained per move | Mean energy | Learning rate at the end |
+| --- | --- | --- | --- |
+| Plain evolution | +0.109 | 58.5 | |
+| Hebbian, first version | +0.074 | 31.2 | 0.038 |
+| Hebbian, move and rotate only | +0.073 | 30.6 | 0.040 |
+| Hebbian, weight limit 0.2 | +0.080 | 35.4 | 0.045 |
+| Hebbian, eligibility trace 0.9 | +0.081 | 36.5 | 0.061 |
+| Hebbian, all three | +0.074 | 34.6 | 0.056 |
+| Node perturbation (noise 0.1, move and rotate) | +0.106 | 52.6 | 0.071 |
+| Node perturbation + trace 0.9 + limit 0.2 (current defaults) | +0.114 | 58.7 | 0.086 |
+| Noise 0.1 only, no learning (control) | +0.109 | 59.0 | 0.085 |
+
+- **None of the three suspects was the main cause.** Each gave at most a small improvement.
+- **The rule was the problem.** Brains are deterministic, so "strengthen what was active before a good step" only reinforces whatever the creature already does; it never tries anything else to learn from.
+- **Node perturbation** adds small random noise (standard deviation `learning_noise`) to the move and rotate outputs. After a step that went better than usual, the weights move towards that step's noise, and away from it after a worse step: `dW = learning_rate × advantage × hidden ⊗ noise`. It learns which deviations from the current behaviour pay off.
+- **Repeated with seeds 1 and 2:**
+
+| Food gained per move | Seed 0 | Seed 1 | Seed 2 |
+| --- | --- | --- | --- |
+| Node perturbation + trace + limit (current defaults) | +0.1141 | +0.1141 | +0.1142 |
+| Same noise, no learning | +0.1091 | +0.1107 | +0.1106 |
+
+  Learning gained 3–5% more food per move in every seed. Mean energy was 58.4–58.7, against 59.0–60.4 for the control. The learning rate ended at 0.085 on average, the same as when it has no effect, so selection now neither favours nor opposes learning. The learning runs are unusually close to each other across seeds; why is not known.
+- **Learning's defaults** (they apply only when `lifetime_learning=1`) are now noise 0.1, move and rotate only, trace 0.9 and limit 0.2. Set `learning_noise=0`, `learning_outputs=0`, `learning_trace_decay=0` and `learned_weight_clip=1` for the first, Hebbian version.
 
 ## 2026-11-03
 
@@ -284,7 +312,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (94 tests, about 20 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (97 tests, about 22 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
@@ -293,7 +321,7 @@ Run with `python3 -m pytest` (94 tests, about 20 s on an RTX 4090; GPU tests are
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
 | `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals, shared and full food per type |
 | `tests/test_sexual_reproduction.py` | Mate finding (same square, close colour, at most one mate each), whole-neuron crossover masks and children, two children per pair with each parent paying, waiting without a mate or breeding alone, 200-step invariants, older configs staying asexual |
-| `tests/test_lifetime_learning.py` | Off by default, trait shapes, the Hebbian update's sign and size, clamping, the forward pass using learned weights, children starting unlearned with the parent's learning rate, reproduction cost not counted as reward, 200-step invariants and checkpoints, older configs not learning |
+| `tests/test_lifetime_learning.py` | Off by default, trait shapes, the Hebbian update's sign and size, clamping, the forward pass using learned weights, children starting unlearned with the parent's learning rate, reproduction cost not counted as reward, 200-step invariants and checkpoints, older configs not learning, learning only the first outputs, the eligibility trace, exploration noise driving the update |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues

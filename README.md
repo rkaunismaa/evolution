@@ -87,7 +87,7 @@ The game starts paused; press space to run it, or pass `--run` to start it runni
 
 Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. The types share the world's food, so each grows towards `max_food / food_types` (set `food_types_share=0` in the config for the full `max_food` each). With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
 
-Pass `--learning` to start a new game with lifetime learning: each creature's last brain layer also learns from its energy gains during its life. In its current form this makes creatures worse (see `CHANGELOG.md`).
+Pass `--learning` to start a new game with lifetime learning: each creature's move and rotate outputs also learn from its energy gains during its life, by trying small random variations and keeping the ones that pay off. The effect is small: 3–5% more food per move than without learning (see `CHANGELOG.md`).
 
 Pass `--sexual` to start a new game with sexual reproduction: creatures ready to reproduce pair with a nearby, similarly coloured mate, and each pair has two children whose brains take each neuron from one parent or the other.
 
@@ -154,6 +154,6 @@ Rough estimates for one developer familiar with the codebase. A large hidden cos
 
 Keeping asexual reproduction as a config option reduces risk.
 
-**RL.** *A lifetime-learning version was built 2026-11-04 as `lifetime_learning` (off by default). In its first form it made creatures worse and evolution suppressed it; see `CHANGELOG.md`.* Gradients are disabled globally in `launch.py`, actions are deterministic (most RL methods need stochastic actions), and the memory feedback makes brains effectively recurrent. Requires choosing a reward (e.g. energy gained) and an algorithm (e.g. per-creature policy gradients), and deciding whether learned weights are inherited. An Adam-style optimizer roughly triples weight memory (~13–14 GB at 131k creatures). A cheaper alternative is lifetime plasticity via a local update rule with no gradients (~1 week): not true RL, but may capture much of the "learn faster" benefit.
+**RL.** *A lifetime-learning version was built 2026-11-04 as `lifetime_learning` (off by default). Hebbian learning made creatures worse; node perturbation gives a small gain; see `CHANGELOG.md`.* Gradients are disabled globally in `launch.py`, actions are deterministic (most RL methods need stochastic actions), and the memory feedback makes brains effectively recurrent. Requires choosing a reward (e.g. energy gained) and an algorithm (e.g. per-creature policy gradients), and deciding whether learned weights are inherited. An Adam-style optimizer roughly triples weight memory (~13–14 GB at 131k creatures). A cheaper alternative is lifetime plasticity via a local update rule with no gradients (~1 week): not true RL, but may capture much of the "learn faster" benefit.
 
 **Suggested order:** non-uniform food growth → environmental changes → plot manager → more plots → species-specific food → sexual reproduction → RL. The early items are cheap, build on each other, and provide the plots needed to tune the expensive ones.
