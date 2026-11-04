@@ -121,17 +121,29 @@ class Config:
     # still computed in float32 and rounded on write; biases and activations stay float32
     brain_dtype: str = 'float32'
 
-    # lifetime learning: 1 = each creature's last brain layer (hidden -> move/rotate/memory outputs)
-    # also has learned weights that change during its life by reward-modulated Hebbian learning. The
-    # reward is the creature's energy change each step (energy paid for children excluded), compared
-    # with its own running average; connections that were active before a better-than-usual step are
-    # strengthened, and weakened after a worse one. Learned weights start at zero in every child (they
+    # lifetime learning: 1 = each creature's last brain layer also has learned weights for the move and
+    # rotate outputs, which change during its life by node perturbation: small random noise is added to
+    # those outputs, and after a step that went better than usual the weights move towards that step's
+    # noise (away from it after a worse step). The reward is the creature's energy change each step
+    # (energy paid for children excluded), compared with its own running average. The defaults below
+    # were the best of the variants tried (see CHANGELOG); plain Hebbian learning made creatures worse. Learned weights start at zero in every child (they
     # are not inherited), but each creature's learning rate is an evolvable trait, so evolution decides
     # how much learning is worth. 0 = brains only change by evolution (the original behaviour)
     lifetime_learning: int = 0
     init_learning_rate_range: Tuple[float, float] = (0.0, 0.02)  # (min, max) learning rate at the start
     max_learning_rate: float = 0.2
-    learned_weight_clip: float = 1.0   # learned weights are clamped to [-clip, clip]
+    learned_weight_clip: float = 0.2   # learned weights are clamped to [-clip, clip]
+    # how many of the brain's outputs learn, counting from the first (move, rotate, then memory).
+    # 0 = all of them
+    learning_outputs: int = 2
+    # eligibility trace: the reward credits a running average of recent hidden x output activity
+    # (each step's weight decays by this factor per step), so it reaches back about 1 / (1 - decay)
+    # steps. 0 = credit only the previous step
+    learning_trace_decay: float = 0.9
+    # exploration noise (standard deviation) added to the learning outputs' pre-activations. > 0
+    # switches the rule from Hebbian (hidden x output) to node perturbation (hidden x noise), which
+    # learns which deviations from the current behaviour pay off. 0 = no noise, Hebbian
+    learning_noise: float = 0.1
     reward_avg_decay: float = 0.99     # running averages of each creature's reward and its spread
 
     ## vision

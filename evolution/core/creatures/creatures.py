@@ -153,9 +153,14 @@ class Creatures:
             self.learning_rates = CreatureTrait(tuple(),
                                     Initializer.mutable('uniform_', *self.cfg.init_learning_rate_range),
                                     Normalizer(norm.clamp, 0.0, self.cfg.max_learning_rate), self.device)
-            self.learned_weights = CreatureTrait((hidden, n_out), Initializer.fillable('zero_'), None, self.device)
+            n_learn = self.cfg.learning_outputs if 0 < self.cfg.learning_outputs < n_out else n_out
+            self.n_learn = n_learn   # the first n_learn outputs learn
+            self.learned_weights = CreatureTrait((hidden, n_learn), Initializer.fillable('zero_'), None, self.device)
             self.last_hidden = CreatureTrait((hidden,), Initializer.fillable('zero_'), None, self.device)
-            self.last_outputs = CreatureTrait((n_out,), Initializer.fillable('zero_'), None, self.device)
+            self.last_outputs = CreatureTrait((n_learn,), Initializer.fillable('zero_'), None, self.device)
+            if self.cfg.learning_trace_decay > 0:
+                self.learning_traces = CreatureTrait((hidden, n_learn), Initializer.fillable('zero_'),
+                                                     None, self.device)
             # energy at the previous brain step; starts equal to the starting energy, so reward 0
             self.last_energies = CreatureTrait(tuple(), Initializer.other_dependent('sizes', self.cfg.init_energy),
                                      None, self.device)
@@ -462,14 +467,23 @@ class Creatures:
         for i, (w, b) in enumerate(zip(self.weights, self.biases)):
             self.activations.append(inputs)
             pre = inputs.to(w.dtype) @ w + b   # b is float32, so this promotes back to float32
+            noise = None
             if learning and i == n_layers - 1:
-                pre = pre + inputs @ self.learned_weights   # lifetime-learned part of the last layer
+                learned = inputs @ self.learned_weights   # lifetime-learned part of the last layer
+                head = pre[..., :self.n_learn] + learned
+                if self.cfg.learning_noise > 0:   # explore: perturb the learning outputs
+                    noise = torch.randn_like(head) * self.cfg.learning_noise
+                    head = head + noise
+                pre = torch.cat([head, pre[..., self.n_learn:]], dim=-1)
             inputs = torch.tanh(pre)
         outputs = inputs.squeeze(dim=1)  # [N, O]
         self.activations.append(inputs)
         if learning:   # remember what was active, for next step's learning update
             self.last_hidden[:] = self.activations[-2].squeeze(1)
-            self.last_outputs[:] = outputs
+            # with exploration noise the update follows the noise (node perturbation): steps that went
+            # better than usual pull the weights towards that step's deviation. Without noise it
+            # follows the outputs themselves (plain Hebbian)
+            self.last_outputs[:] = noise.squeeze(1) if noise is not None else outputs[:, :self.n_learn]
         self.memories[:] = outputs[:, 2:]  # only 2 outputs actually do something, so the rest are memory
         return outputs
 
@@ -489,6 +503,11 @@ class Creatures:
         # dW[i, j] = lr * advantage * hidden_i * output_j
         scale = (self.learning_rates.data * advantage)[:, None, None]
         update = self.last_hidden.data[:, :, None] * self.last_outputs.data[:, None, :]
+        if cfg.learning_trace_decay > 0:   # reward credits recent activity, not just the last step
+            # a running average, so updates stay the same size whatever the decay
+            decay = cfg.learning_trace_decay
+            self.learning_traces[:] = decay * self.learning_traces.data + (1 - decay) * update
+            update = self.learning_traces.data
         self.learned_weights[:] = (self.learned_weights.data + scale * update).clamp_(
             -cfg.learned_weight_clip, cfg.learned_weight_clip)
 
