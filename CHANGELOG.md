@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-11-04
+
+Lifetime learning is built and off by default (`lifetime_learning`, or `--learning` for a new game), but in its current form it makes creatures worse, and evolution pushes it down. Plain evolution, measured properly for the first time, does move creatures towards food.
+
+| Date | Commit | What changed | Why |
+| --- | --- | --- | --- |
+| 2026-11-04 | `7ce9036` | New `lifetime_learning` option and `--learning` flag: reward-modulated Hebbian learning in the brain's last layer, with an evolvable learning rate | README planned feature: RL, in its cheaper lifetime-learning form |
+
+### Lifetime learning (`7ce9036`)
+
+With `lifetime_learning=1`, the brain's last layer (hidden neurons to the move, rotate and memory outputs) gets a second set of weights that changes during the creature's life:
+
+- **The update:** each brain step, `dW = learning_rate × advantage × hidden ⊗ output` of the previous step. That strengthens what was active before a better-than-usual step and weakens it after a worse one.
+- **The reward:** the energy change since the previous step, not counting energy paid for children. The advantage is that reward minus the creature's running average, divided by its running spread and clamped to ±5.
+- **Limits:** learned weights are clamped to ±1, and they are added to the inherited ones.
+- **Inheritance:** children start with no learned weights. Their learning rate is inherited and mutates (clamped to [0, 0.2]), so evolution can raise or lower it.
+- **Cost:** seven extra traits, about 0.28 GB at 131,072 creatures. They exist only when learning is on.
+
+Results on the `large` preset, 40,000 steps, seed 0, measured over the last 10,000 steps. "Food gained per move" is the food at a creature's cell after moving minus before, both read from the same snapshot of the food grid, so it rewards moving towards food:
+
+| | Plain evolution | Lifetime learning | Neutral control | Movement shuffled |
+| --- | --- | --- | --- | --- |
+| Food gained per move | +0.109 | +0.074 | +0.110 | +0.054 |
+| Creatures on the richest 15% of land | 26.5% | 31.4% | 27.1% | 32.5% |
+| Mean energy | 58.5 | 31.2 | 59.8 | 20.0 |
+| Mean size | 0.71 | 0.56 | 0.72 | 0.40 |
+| Mean learning rate (0.010 at the start) | | 0.038 | 0.083 | |
+
+The neutral control has the learning-rate gene but learned weights clamped to 0, so learning has no effect. Movement shuffled moves each creature by another creature's outputs.
+
+- **Plain evolution does steer towards food.** Its moves gain twice as much food as shuffled moves. The earlier navigation experiments measured gathering on rich land, which shuffled creatures do even more, so that measure missed this.
+- **Learning hurts:** less food per move, about half the energy, smaller creatures.
+- **Evolution pushes learning down.** With no effect on the creature, the learning rate drifts up from 0.010 to 0.083, because it cannot fall below 0. With real learning it reaches only 0.038, so selection acts against it.
+- **Possible reasons:**
+  - one step's energy change is a noisy reward;
+  - learning also changes the memory outputs;
+  - a ±1 limit is large next to the inherited weights, which start within about ±0.3.
+
+  None of these has been tested.
+
 ## 2026-11-03
 
 The `large` preset now gives creatures a 5×5 food view instead of 9×9 (`food_sight` 4 → 2), because the navigation experiments showed they were not using it. At 131,072 creatures this lowers peak GPU memory from 3.09 to 2.27 GiB and step time from 5.05 to 3.82 ms on an RTX 4090. Saved games keep the `food_sight` they were made with, so the saving applies only to new games.
@@ -244,7 +284,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (84 tests, about 18 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (94 tests, about 20 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
@@ -253,6 +293,7 @@ Run with `python3 -m pytest` (84 tests, about 18 s on an RTX 4090; GPU tests are
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
 | `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals, shared and full food per type |
 | `tests/test_sexual_reproduction.py` | Mate finding (same square, close colour, at most one mate each), whole-neuron crossover masks and children, two children per pair with each parent paying, waiting without a mate or breeding alone, 200-step invariants, older configs staying asexual |
+| `tests/test_lifetime_learning.py` | Off by default, trait shapes, the Hebbian update's sign and size, clamping, the forward pass using learned weights, children starting unlearned with the parent's learning rate, reproduction cost not counted as reward, 200-step invariants and checkpoints, older configs not learning |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues
