@@ -121,6 +121,19 @@ class Config:
     # still computed in float32 and rounded on write; biases and activations stay float32
     brain_dtype: str = 'float32'
 
+    # lifetime learning: 1 = each creature's last brain layer (hidden -> move/rotate/memory outputs)
+    # also has learned weights that change during its life by reward-modulated Hebbian learning. The
+    # reward is the creature's energy change each step (energy paid for children excluded), compared
+    # with its own running average; connections that were active before a better-than-usual step are
+    # strengthened, and weakened after a worse one. Learned weights start at zero in every child (they
+    # are not inherited), but each creature's learning rate is an evolvable trait, so evolution decides
+    # how much learning is worth. 0 = brains only change by evolution (the original behaviour)
+    lifetime_learning: int = 0
+    init_learning_rate_range: Tuple[float, float] = (0.0, 0.02)  # (min, max) learning rate at the start
+    max_learning_rate: float = 0.2
+    learned_weight_clip: float = 1.0   # learned weights are clamped to [-clip, clip]
+    reward_avg_decay: float = 0.99     # running averages of each creature's reward and its spread
+
     ## vision
     food_sight: int = 3 # how many squares (grid) away creatures can see food (1 => a 3x3 window centered on them)
     num_rays: int = 32 # number of rays creatures can see with

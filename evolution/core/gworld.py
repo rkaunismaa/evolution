@@ -241,6 +241,8 @@ class GWorld():
         self.celled_world = self.compute_grid_setup()
         self.collisions = self.trace_rays_grid(*self.celled_world)
         stimuli = self.collect_stimuli(self.collisions)
+        if getattr(self.cfg, 'lifetime_learning', 0):
+            self.creatures.learn()   # credit last step's actions with the energy they led to
         self.outputs = self.think(stimuli)
 
     @Profile.cuda_profile

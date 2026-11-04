@@ -26,6 +26,8 @@ if __name__ == '__main__':
                         help='Number of food types; creature colour picks which one each eats (new games only)')
     parser.add_argument('--sexual', action='store_true',
                         help='Sexual reproduction: nearby, similarly coloured creatures pair up (new games only)')
+    parser.add_argument('--learning', action='store_true',
+                        help='Lifetime learning: brains also learn from energy gains during life (new games only)')
 
     benchmark_opts = parser.add_argument_group('Benchmarking options')
     benchmark_opts.add_argument('--style', choices=['nsys', 'torch-profile', 'cuda-events', 'tune-hyperparams'],
@@ -62,6 +64,8 @@ if __name__ == '__main__':
         cfg.food_types = args.food_types
     if args.sexual:
         cfg.sexual_reproduction = 1
+    if args.learning:
+        cfg.lifetime_learning = 1
 
     if args.seed >= 0:
         torch.random.manual_seed(args.seed)

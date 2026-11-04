@@ -147,6 +147,21 @@ class Creatures:
         self.weights: List[CreatureTrait] = weights
         self.biases: List[CreatureTrait] = biases
 
+        if getattr(self.cfg, 'lifetime_learning', 0):
+            hidden, n_out = layer_sizes[-2], layer_sizes[-1]
+            # the learning rate is inherited and mutates (so it can evolve); the rest is per lifetime
+            self.learning_rates = CreatureTrait(tuple(),
+                                    Initializer.mutable('uniform_', *self.cfg.init_learning_rate_range),
+                                    Normalizer(norm.clamp, 0.0, self.cfg.max_learning_rate), self.device)
+            self.learned_weights = CreatureTrait((hidden, n_out), Initializer.fillable('zero_'), None, self.device)
+            self.last_hidden = CreatureTrait((hidden,), Initializer.fillable('zero_'), None, self.device)
+            self.last_outputs = CreatureTrait((n_out,), Initializer.fillable('zero_'), None, self.device)
+            # energy at the previous brain step; starts equal to the starting energy, so reward 0
+            self.last_energies = CreatureTrait(tuple(), Initializer.other_dependent('sizes', self.cfg.init_energy),
+                                     None, self.device)
+            self.reward_avgs = CreatureTrait(tuple(), Initializer.fillable('zero_'), None, self.device)
+            self.reward_spreads = CreatureTrait(tuple(), Initializer.fillable('fill_', 1e-2), None, self.device)
+
         # this must be defined last, so that the right number of mutable parameters are set
         self.mutation_rates = CreatureTrait((self.traits.num_mutable+1,),
                                   Initializer.mutable('uniform_', *self.cfg.init_mut_rate_range),
@@ -287,8 +302,11 @@ class Creatures:
         self.n_children[reproducers] += 1
 
         # could fuse this
+        energy_before = self.energies[reproducers]
         self.energies[reproducers] -= self.sizes[reproducers]  # subtract off the energy that you've put into the world
         self.energies[reproducers] /= self.cfg.reproduce_energy_loss_frac  # then lose a bit extra because this process is lossy
+        if getattr(self.cfg, 'lifetime_learning', 0):   # paying for a child is not a bad outcome to learn from
+            self.last_energies[reproducers] += self.energies[reproducers] - energy_before
 
         new_creatures = self.traits.reproduce_traits(self.mutation_rates[reproducers], reproducers, num_reproducers,
                                                      partners)
@@ -439,13 +457,40 @@ class Creatures:
             and the last cfg.mem_size coordinates are for memory."""
 
         self.activations.clear()
-        for w, b in zip(self.weights, self.biases):
+        learning = getattr(self.cfg, 'lifetime_learning', 0)
+        n_layers = len(self.weights)
+        for i, (w, b) in enumerate(zip(self.weights, self.biases)):
             self.activations.append(inputs)
-            inputs = torch.tanh(inputs.to(w.dtype) @ w + b)  # b is float32, so this promotes back to float32
+            pre = inputs.to(w.dtype) @ w + b   # b is float32, so this promotes back to float32
+            if learning and i == n_layers - 1:
+                pre = pre + inputs @ self.learned_weights   # lifetime-learned part of the last layer
+            inputs = torch.tanh(pre)
         outputs = inputs.squeeze(dim=1)  # [N, O]
         self.activations.append(inputs)
+        if learning:   # remember what was active, for next step's learning update
+            self.last_hidden[:] = self.activations[-2].squeeze(1)
+            self.last_outputs[:] = outputs
         self.memories[:] = outputs[:, 2:]  # only 2 outputs actually do something, so the rest are memory
         return outputs
+
+    def learn(self):
+        """Reward-modulated Hebbian update of the lifetime-learned last-layer weights (see
+        Config.lifetime_learning). Call once per brain step, before forward: the reward is the energy
+        change since the previous brain step, and it credits the hidden -> output activity of that step."""
+        cfg = self.cfg
+        energies = self.energies.data
+        reward = energies - self.last_energies.data
+        self.last_energies[:] = energies
+        advantage = (reward - self.reward_avgs.data) / (self.reward_spreads.data + 1e-6)
+        advantage = advantage.clamp_(-5.0, 5.0)   # an occasional big hit (an attack) can't dominate
+        d = cfg.reward_avg_decay
+        self.reward_spreads[:] = d * self.reward_spreads.data + (1 - d) * (reward - self.reward_avgs.data).abs()
+        self.reward_avgs[:] = d * self.reward_avgs.data + (1 - d) * reward
+        # dW[i, j] = lr * advantage * hidden_i * output_j
+        scale = (self.learning_rates.data * advantage)[:, None, None]
+        update = self.last_hidden.data[:, :, None] * self.last_outputs.data[:, None, :]
+        self.learned_weights[:] = (self.learned_weights.data + scale * update).clamp_(
+            -cfg.learned_weight_clip, cfg.learned_weight_clip)
 
     def rotate_creatures(self, outputs: Tensor, state: GameState):
         """Given the neural network outputs `outputs`, rotate each creature accordingly.
