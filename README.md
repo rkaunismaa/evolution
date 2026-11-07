@@ -91,6 +91,14 @@ Pass `--learning` to start a new game with lifetime learning: each creature's mo
 
 Pass `--sexual` to start a new game with sexual reproduction: creatures ready to reproduce pair with a nearby, similarly coloured mate, and each pair has two children whose brains take each neuron from one parent or the other.
 
+To record a video of the game window (X11, needs `ffmpeg`), start the game through the recording script, with `launch.py`'s arguments after `--`:
+
+```bash
+./record_game.sh -o gameplay.mp4 -- --food_types 3 --sexual --load_path new.ckpt --run
+```
+
+Recording starts when the game window appears and stops when you press Ctrl-C (the game keeps running) or close the game. Run `./record_game.sh` with no arguments to record a game that is already open. Place or maximise the window before recording starts: ffmpeg records a fixed area of the screen.
+
 Simulation parameters can be modified by opening launch.py, and changing the `evolution.core.config.Config` object. Documentation for all supported parameters are outlined in `evolution/core/config.py`.
 
 To do nsys-style benchmarking, use the following command:

@@ -19,3 +19,6 @@ assets/grey_square_creature_sprite.png
 assets/square_creature_circle.png
 assets/square_creature_sprite.png
 .pytest_cache/
+
+# gameplay videos from record_game.sh
+*.mp4
