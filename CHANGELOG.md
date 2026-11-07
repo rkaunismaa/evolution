@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-07
+
+| Date | Commit | What changed | Why |
+| --- | --- | --- | --- |
+| 2026-11-07 | `bf9325f` | `record_game.sh` records the game window to MP4 with ffmpeg (NVIDIA encoder when available); `*.mp4` ignored | Recording gameplay videos |
+
+`./record_game.sh -o out.mp4 -- <launch.py arguments>` starts the game and records it. Recording stops on Ctrl-C, which leaves the game running, or when the game closes. With no arguments it records a game that is already open.
+
 ## 2026-11-04
 
 Lifetime learning is built and off by default (`lifetime_learning`, or `--learning` for a new game). The first version, Hebbian learning, made creatures worse and evolution pushed it down. The current version, node perturbation, no longer hurts: in three seeds, creatures gained 3–5% more food per move than the same noise without learning. Plain evolution, measured properly for the first time, does move creatures towards food.
