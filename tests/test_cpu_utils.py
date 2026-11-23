@@ -126,3 +126,16 @@ def test_old_checkpoint_config_gets_flat_cover_and_original_defaults():
     old = pickle.loads(pickle.dumps(cfg))
     assert (old.food_cover_scaled, old.kill_reproduce_every, old.brain_dtype, old.food_grow_every) == \
         (0, 1, 'float32', 1)
+
+
+def test_pinned_panels_keep_clear_of_the_plots_window():
+    from evolution.visual.gui.ui_element import place_clear_of
+    corner, size = (1570.0, 0.0), (350.0, 300.0)   # a 350x300 panel in a 1920-wide window's corner
+    assert place_clear_of(corner, size, None) == corner                       # nothing to avoid
+    assert place_clear_of(corner, size, lambda: None) == corner               # Plots not drawn yet
+    # Plots window in the same corner: move just left of it
+    assert place_clear_of(corner, size, lambda: (1425.0, 229.0 - 229.0, 489.0, 773.0)) == (1425.0 - 350.0, 0.0)
+    # Plots window lower down, not overlapping: stay put
+    assert place_clear_of(corner, size, lambda: (1425.0, 400.0, 489.0, 600.0)) == corner
+    # never off the left edge
+    assert place_clear_of((10.0, 0.0), size, lambda: (100.0, 0.0, 300.0, 300.0)) == (0.0, 0.0)

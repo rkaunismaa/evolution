@@ -34,6 +34,10 @@ class UIManager(EventHandler):
         self.creature_info = CreatureStatusWindow(cfg, world, window, state)
         self.cell_info = CellStatusWindow(cfg, world, window, state)
         self.plots = PlotsWindow(cfg, world, window, state)
+        # the creature and cell panels are pinned to the top-right corner; keep them clear of the
+        # movable Plots window (its rect is from the previous frame, which is close enough)
+        self.creature_info.avoid = lambda: self.plots.rect
+        self.cell_info.avoid = lambda: self.plots.rect
 
 
     def __setattr__(self, name, value):

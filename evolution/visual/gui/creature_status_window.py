@@ -7,7 +7,7 @@ from evolution.core.gworld import GWorld
 from evolution.state.game_state import GameState
 from evolution.core.creatures.trait_initializer import InitializerStyle
 
-from .ui_element import CollapseableHeader, Window, Lines, UIElement
+from .ui_element import place_clear_of, CollapseableHeader, Window, Lines, UIElement
 
 
 class CreatureStatusWindow(Window):
@@ -18,6 +18,7 @@ class CreatureStatusWindow(Window):
         self.state = state
         self.wnd = window
         self.y_pos = 0
+        self.avoid = None   # optional () -> (x, y, w, h) of a window to keep clear of
         self.main_text = Lines()
         self.mutation_element = CollapseableHeader('Mutation Rates')
 
@@ -43,10 +44,11 @@ class CreatureStatusWindow(Window):
         if not creat.update_state_available:
             height -= sum(p.height for p in self.dynamic_elements)
 
-        pos = (window_width - self.width, self.y_pos)
+        sz = (self.width, height)
+        # pinned to the top-right corner, unless the Plots window is there: then just left of it
+        pos = place_clear_of((window_width - self.width, self.y_pos), sz, self.avoid)
         imgui.set_next_window_pos(pos, cond=imgui.Cond_.always)
 
-        sz = (self.width, height)
         imgui.set_next_window_size(sz, cond=imgui.Cond_.always)
 
         # Begin a new ImGui window

@@ -5,7 +5,7 @@ from evolution.core.config import Config
 from evolution.core.gworld import GWorld
 from evolution.state.game_state import GameState
 
-from .ui_element import Window, Lines
+from .ui_element import place_clear_of, Window, Lines
 
 
 class CellStatusWindow(Window):
@@ -16,6 +16,7 @@ class CellStatusWindow(Window):
         self.state = state
         self.wnd = window
         self.y_pos = 0
+        self.avoid = None   # optional () -> (x, y, w, h) of a window to keep clear of
         self.main_text = Lines()
         self.delta_text = Lines()
 
@@ -30,10 +31,11 @@ class CellStatusWindow(Window):
         if not cell.update_state_available:
             height -= self.delta_text.height
 
-        pos = (window_width - self.width, self.y_pos)
+        sz = (self.width, height)
+        # pinned to the top-right corner, unless the Plots window is there: then just left of it
+        pos = place_clear_of((window_width - self.width, self.y_pos), sz, self.avoid)
         imgui.set_next_window_pos(pos, cond=imgui.Cond_.always)
 
-        sz = (self.width, height)
         imgui.set_next_window_size(sz, cond=imgui.Cond_.always)
 
         # Begin a new ImGui window

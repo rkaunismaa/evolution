@@ -1,7 +1,27 @@
-from typing import Dict
+from typing import Callable, Dict, Optional, Tuple
 from contextlib import contextmanager
 from abc import ABC, abstractmethod
 from imgui_bundle import imgui
+
+
+Rect = Tuple[float, float, float, float]   # x, y, width, height in pixels
+
+
+def place_clear_of(pos: Tuple[float, float], size: Tuple[float, float],
+                   avoid: Optional[Callable[[], Optional[Rect]]]) -> Tuple[float, float]:
+    """Return `pos`, moved left so that a window of `size` there does not overlap the rectangle
+    `avoid()` returns (None = nothing to avoid). Used by the panels pinned to the top-right corner,
+    which the movable Plots window can also occupy."""
+    rect = avoid() if avoid is not None else None
+    if rect is None:
+        return pos
+    x, y = pos
+    w, h = size
+    rx, ry, rw, rh = rect
+    overlaps = x < rx + rw and rx < x + w and y < ry + rh and ry < y + h
+    if not overlaps:
+        return pos
+    return (max(rx - w, 0.0), y)
 
 
 class UIElement(ABC):

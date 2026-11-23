@@ -40,6 +40,7 @@ class PlotsWindow(Window):
         # Without a saved layout, keep placing the window for the first frames: the game window
         # starts at its configured size and is only then resized/maximised by the window manager.
         self._placing_frames = 0 if self._has_saved_layout() else self.PLACING_FRAMES
+        self.rect = None   # (x, y, w, h) as of the last frame; None before the first
 
     def render(self):
         font = imgui.get_font_size()
@@ -51,6 +52,10 @@ class PlotsWindow(Window):
             imgui.set_next_window_size(size, cond=imgui.Cond_.always)
 
         with self.begin(imgui.WindowFlags_.menu_bar):
+            # where the window is, even when collapsed to its title bar, for the pinned panels to
+            # keep clear of (see place_clear_of)
+            (x, y), (w, h) = imgui.get_window_pos(), imgui.get_window_size()
+            self.rect = (x, y, w, h)
             if not self.open:
                 return
             self._keep_on_screen()
