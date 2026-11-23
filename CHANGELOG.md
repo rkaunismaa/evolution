@@ -6,6 +6,7 @@ New `species` preset (`--config species`): the `large` world with three food typ
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-23 | `40d9fb7` | Creature and cell panels move to the left of the Plots window when it is in the top-right corner | In a recorded game the cell panel was drawn over the Plots window |
 | 2026-11-23 | `59ab50c` | `species` preset in `launch.py` | At the default growth rate the cap, not food, limited the population, and species barely competed |
 
 ### Choosing the growth rate
@@ -345,7 +346,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (97 tests, about 22 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (98 tests, about 22 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
