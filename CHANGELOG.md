@@ -14,7 +14,7 @@ All runs on the `large` world with `food_types=3` and `sexual_reproduction=1`, 4
 
 | `food_growth_rate` | Lowest population | Below the cap | Creatures per type at step 40,000 | Changes of lead |
 | --- | --- | --- | --- | --- |
-| 10 (default) | about 2,000 | rarely, after step 10,000 | 58,323 / 26,518 / 46,231 (at 60,000) | not measured |
+| 10 (default) | not measured | at the cap from step 10,000 | 58,323 / 26,518 / 46,231 (at 60,000) | not measured |
 | 5 | 2,042 | 10% | 53,533 / 44,979 / 32,560 | 0 |
 | 2.5 | 1,358 | 24% | 44,483 / 61,611 / 24,978 | 1 |
 | **2.0, seeds 0, 1, 2** | 1,167 / 1,533 / 1,321 | 35% / 29% / 32% | 38,061 / 42,415 / 50,596; 40,759 / 46,223 / 44,090; 48,745 / 48,198 / 34,129 | 4 / 3 / 4 |
