@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-23
+
+New `species` preset (`--config species`): the `large` world with three food types, sexual reproduction and `food_growth_rate` 2.0 instead of 10, so that the species compete for food.
+
+| Date | Commit | What changed | Why |
+| --- | --- | --- | --- |
+| 2026-11-23 | COMMIT | `species` preset in `launch.py` | At the default growth rate the cap, not food, limited the population, and species barely competed |
+
+### Choosing the growth rate
+
+All runs on the `large` world with `food_types=3` and `sexual_reproduction=1`, 40,000 steps, seed 0 unless noted. "Below the cap" counts steps after step 10,000 and includes recovery from the early crash.
+
+| `food_growth_rate` | Lowest population | Below the cap | Creatures per type at step 40,000 | Changes of lead |
+| --- | --- | --- | --- | --- |
+| 10 (default) | about 2,000 | rarely, after step 10,000 | 58,323 / 26,518 / 46,231 (at 60,000) | not measured |
+| 5 | 2,042 | 10% | 53,533 / 44,979 / 32,560 | 0 |
+| 2.5 | 1,358 | 24% | 44,483 / 61,611 / 24,978 | 1 |
+| **2.0, seeds 0, 1, 2** | 1,167 / 1,533 / 1,321 | 35% / 29% / 32% | 38,061 / 42,415 / 50,596; 40,759 / 46,223 / 44,090; 48,745 / 48,198 / 34,129 | 4 / 3 / 4 |
+| 1.5 | 1,056 | 42% | 26,176 / 54,869 / 50,027 | 1 |
+| 1.0 | 683 | 100% (reached 117,141 at most) | 37,632 / 41,998 / 30,825 | 3 |
+
+- **Competition happens mostly at the cap.** Births there only replace deaths, so a species with more food per creature out-breeds the others. At growth 2.5 and below, the most numerous species ends up with the least food per cell and loses ground. With growth 2.0, the early leader (60,000–70,000 creatures at step 20,000) fell to 38,000–49,000 by step 40,000 in every seed, while the others caught up.
+- **Too little food is slow and risky.** At growth 1.0 the world took 35,000 steps to fill and fell to 683 creatures early on.
+- **2.0 was chosen** because all three seeds survived (lowest population 1,167), filled the world by about step 20,000, and changed lead 3–4 times.
+
 ## 2026-11-07
 
 | Date | Commit | What changed | Why |

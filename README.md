@@ -89,6 +89,12 @@ Pass `--food_types 3` (any number) to start a new game with species-specific foo
 
 Pass `--learning` to start a new game with lifetime learning: each creature's move and rotate outputs also learn from its energy gains during its life, by trying small random variations and keeping the ones that pay off. The effect is small: 3–5% more food per move than without learning (see `CHANGELOG.md`).
 
+For three species that compete for food, use the `species` preset: the `large` world with `--food_types 3 --sexual` and food growing at a fifth of the usual rate. The population crashes early, fills the world by about step 20,000, and then the species' numbers rise and fall against each other:
+
+```bash
+./launch.py --config species --load_path species.ckpt --run
+```
+
 Pass `--sexual` to start a new game with sexual reproduction: creatures ready to reproduce pair with a nearby, similarly coloured mate, and each pair has two children whose brains take each neuron from one parent or the other.
 
 To record a video of the game window (X11, needs `ffmpeg`), start the game through the recording script, with `launch.py`'s arguments after `--`:

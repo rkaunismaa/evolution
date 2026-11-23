@@ -14,8 +14,9 @@ from evolution.core import benchmarking  # pylint: disable=wrong-import-position
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evolution simulator')
     parser.add_argument('--seed', type=int, default=-1, help='Random seed')
-    parser.add_argument('--config', choices=['small', 'medium', 'large'], default='large',
-                        help='Choose a predefined configuration')
+    parser.add_argument('--config', choices=['small', 'medium', 'large', 'species'], default='large',
+                        help='Choose a predefined configuration (species: large with three competing '
+                             'species, see CHANGELOG)')
     parser.add_argument('--load_path', type=str, default='game.ckpt',
                         help='Load path for simulation state (ignored if --style is set)')
     parser.add_argument('--run', action='store_true',
@@ -49,12 +50,16 @@ if __name__ == '__main__':
         case 'medium':
             cfg = config.Config(food_cover_scaled=1)
 
-        case 'large':
+        case 'large' | 'species':
             cfg = config.Config(start_creatures=8192, max_creatures=131072, size=5000, food_cover_decr=0.2,
                                 cell_size=16.0, max_per_cell=40,
                                 food_sight=2, size_range=(0.1, 5.0),
                                 brain_size=(50, 40), kill_reproduce_every=4, brain_dtype='float16',
                                 food_grow_every=4, food_cover_scaled=1, food_capacity_variation=0.5)
+            if args.config == 'species':
+                # three colour-band species sharing the world's food, sexual reproduction, and food
+                # scarce enough that they compete for it (food_growth_rate 10 -> 2.0)
+                cfg.update_in_place(dict(food_types=3, sexual_reproduction=1, food_growth_rate=2.0))
 
     if args.max_creatures is not None:
         cfg.max_creatures = args.max_creatures
