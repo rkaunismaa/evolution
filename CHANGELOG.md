@@ -6,7 +6,7 @@ New `species` preset (`--config species`): the `large` world with three food typ
 
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
-| 2026-11-23 | COMMIT | `species` preset in `launch.py` | At the default growth rate the cap, not food, limited the population, and species barely competed |
+| 2026-11-23 | `59ab50c` | `species` preset in `launch.py` | At the default growth rate the cap, not food, limited the population, and species barely competed |
 
 ### Choosing the growth rate
 
