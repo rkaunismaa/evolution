@@ -4,8 +4,11 @@
 
 New `species` preset (`--config species`): the `large` world with three food types, sexual reproduction and `food_growth_rate` 2.0 instead of 10, so that the species compete for food.
 
+Lifetime learning was tested in harder worlds and in more of the brain. With the last hidden layer learning too (`learn_hidden_layer=1`, off by default), evolution favours learning for the first time: in three seeds the learning rate ended about 9% above neutral drift, and creatures gained 7–8% more food per move. It costs about 6 times the step time. Where food is scarce (the `species` preset), learning hurts and is suppressed.
+
 | Date | Commit | What changed | Why |
 | --- | --- | --- | --- |
+| 2026-11-23 | `9ada181` | New `learn_hidden_layer` option (off): the last hidden layer learns too | Learning only the last layer could only re-weight features the inherited brain already computed |
 | 2026-11-23 | `40d9fb7` | Creature and cell panels move to the left of the Plots window when it is in the top-right corner | In a recorded game the cell panel was drawn over the Plots window |
 | 2026-11-23 | `59ab50c` | `species` preset in `launch.py` | At the default growth rate the cap, not food, limited the population, and species barely competed |
 
@@ -25,6 +28,25 @@ All runs on the `large` world with `food_types=3` and `sexual_reproduction=1`, 4
 - **Competition happens mostly at the cap.** Births there only replace deaths, so a species with more food per creature out-breeds the others. At growth 2.5 and below, the most numerous species ends up with the least food per cell and loses ground. With growth 2.0, the early leader (60,000–70,000 creatures at step 20,000) fell to 38,000–49,000 by step 40,000 in every seed, while the others caught up.
 - **Too little food is slow and risky.** At growth 1.0 the world took 35,000 steps to fill and fell to 683 creatures early on.
 - **2.0 was chosen** because all three seeds survived (lowest population 1,167), filled the world by about step 20,000, and changed lead 3–4 times.
+
+### Can lifetime learning pay off? (no code changes apart from `9ada181`)
+
+Runs on the `large` world with `lifetime_learning=1` and its defaults (node perturbation, exploration noise 0.1, trace 0.9, limit 0.2), 40,000 steps, measured over the last 10,000. The control has the same noise but learned weights clamped to 0, so its learning rate shows neutral drift. Food per move is read from each creature's own food type.
+
+| World | Learning layers | Food per move, learning / control | Learning rate, learning / control | Mean energy, learning / control |
+| --- | --- | --- | --- | --- |
+| Static land (4 November) | last | +0.114 / +0.109 | 0.086 / 0.085 | 58.7 / 59.0 |
+| Drifting land (`food_capacity_change_steps=5000`) | last | +0.113 / +0.111 | 0.086 / 0.082 | 59.1 / 61.5 |
+| `species` preset (scarce food) | last | +0.040 / +0.047 | 0.022 / 0.088 | 1.91 / 2.50 |
+| `species` preset | last + hidden | +0.043 / +0.048 | 0.015 / 0.086 | 2.10 / 2.40 |
+| Static land, seed 0 | last + hidden | +0.118 / +0.110 | 0.092 / 0.083 | 61.0 / 60.0 |
+| Static land, seed 1 | last + hidden | +0.119 / +0.110 | 0.092 / 0.084 | 61.7 / 60.4 |
+| Static land, seed 2 | last + hidden | +0.118 / +0.109 | 0.090 / 0.084 | 61.6 / 59.4 |
+
+- **Learning in the hidden layer is favoured, weakly.** In all three seeds the learning rate ended 0.006–0.009 above the control's, while the controls ended within 0.003 of each other. Food per move was 7–8% higher and energy 2–3% higher. This is the first setting where evolution raised learning above neutral drift.
+- **Where food is scarce, learning hurts.** In the `species` preset the learning rate was pushed to a quarter of neutral drift, and food per move and energy were lower. With the hidden layer learning, the population also recovered more slowly from the early crash: 2,476 creatures at step 10,000, against 10,068 for the control. One likely reason is that each step's energy change is mostly noise from competition when food is scarce, but this has not been tested.
+- **A drifting landscape did not make learning more valuable** than a static one.
+- **Cost:** with the hidden layer learning, a step takes about 27 ms on the `large` preset, against about 4.5 ms with only the last layer, because the 50 × 40 updates for every creature are written each step. One run at full population used about 17 GB of GPU memory, so these runs could not share the GPU.
 
 ## 2026-11-07
 
@@ -346,7 +368,7 @@ When births brought the population to exactly `max_creatures`, `add_with_deaths_
 
 ### Tests
 
-Run with `python3 -m pytest` (98 tests, about 22 s on an RTX 4090; GPU tests are skipped without CUDA).
+Run with `python3 -m pytest` (100 tests, about 22 s on an RTX 4090; GPU tests are skipped without CUDA).
 
 | File | What it checks |
 | --- | --- |
@@ -355,7 +377,7 @@ Run with `python3 -m pytest` (98 tests, about 22 s on an RTX 4090; GPU tests are
 | `tests/test_simulation.py` | 200-step invariants for each option combination; scheduling; float16 brains; checkpoint round trips; capacity field range, smoothness, convergence, drift and saving; plot trackers and birth/death rates |
 | `tests/test_food_types.py` | Colour bands, grid shapes, vision, eating and dead creatures' food limited to the own type, separate rich land per type, 200-step invariants, checkpoint round trips, older capacity-field saves, cell panel totals, shared and full food per type |
 | `tests/test_sexual_reproduction.py` | Mate finding (same square, close colour, at most one mate each), whole-neuron crossover masks and children, two children per pair with each parent paying, waiting without a mate or breeding alone, 200-step invariants, older configs staying asexual |
-| `tests/test_lifetime_learning.py` | Off by default, trait shapes, the Hebbian update's sign and size, clamping, the forward pass using learned weights, children starting unlearned with the parent's learning rate, reproduction cost not counted as reward, 200-step invariants and checkpoints, older configs not learning, learning only the first outputs, the eligibility trace, exploration noise driving the update |
+| `tests/test_lifetime_learning.py` | Off by default, trait shapes, the Hebbian update's sign and size, clamping, the forward pass using learned weights, children starting unlearned with the parent's learning rate, reproduction cost not counted as reward, 200-step invariants and checkpoints, older configs not learning, learning only the first outputs, the eligibility trace, exploration noise driving the update, hidden-layer learning |
 | `tests/test_cpu_utils.py` | Publish/subscribe, metric trackers, quantization, config helpers, older saved configs keeping original behaviour |
 
 ### Known issues

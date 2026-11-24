@@ -87,7 +87,7 @@ The game starts paused; press space to run it, or pass `--run` to start it runni
 
 Pass `--food_types 3` (any number) to start a new game with species-specific food: each creature's colour picks which food it eats, sees and leaves behind when it dies. The types share the world's food, so each grows towards `max_food / food_types` (set `food_types_share=0` in the config for the full `max_food` each). With several types, the food heatmap shows the selected creature's food, or the average over all types when none is selected.
 
-Pass `--learning` to start a new game with lifetime learning: each creature's move and rotate outputs also learn from its energy gains during its life, by trying small random variations and keeping the ones that pay off. The effect is small: 3–5% more food per move than without learning (see `CHANGELOG.md`).
+Pass `--learning` to start a new game with lifetime learning: each creature's move and rotate outputs also learn from its energy gains during its life, by trying small random variations and keeping the ones that pay off. The effect is small: 3–5% more food per move than without learning. Setting `learn_hidden_layer=1` in the config makes the last hidden layer learn too, which evolution slightly favours, but steps take about 6 times as long; where food is scarce, learning hurts (see `CHANGELOG.md`).
 
 For three species that compete for food, use the `species` preset: the `large` world with `--food_types 3 --sexual` and food growing at a fifth of the usual rate. The population crashes early, fills the world by about step 20,000, and then the species' numbers rise and fall against each other:
 
