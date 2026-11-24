@@ -161,6 +161,15 @@ class Creatures:
             if self.cfg.learning_trace_decay > 0:
                 self.learning_traces = CreatureTrait((hidden, n_learn), Initializer.fillable('zero_'),
                                                      None, self.device)
+            if getattr(self.cfg, 'learn_hidden_layer', 0):   # the layer before the last learns too
+                h_in, h_out = layer_sizes[-3], layer_sizes[-2]
+                self.hidden_learned_weights = CreatureTrait((h_in, h_out), Initializer.fillable('zero_'),
+                                                            None, self.device)
+                self.hidden_last_inputs = CreatureTrait((h_in,), Initializer.fillable('zero_'), None, self.device)
+                self.hidden_last_noise = CreatureTrait((h_out,), Initializer.fillable('zero_'), None, self.device)
+                if self.cfg.learning_trace_decay > 0:
+                    self.hidden_learning_traces = CreatureTrait((h_in, h_out), Initializer.fillable('zero_'),
+                                                                None, self.device)
             # energy at the previous brain step; starts equal to the starting energy, so reward 0
             self.last_energies = CreatureTrait(tuple(), Initializer.other_dependent('sizes', self.cfg.init_energy),
                                      None, self.device)
@@ -463,11 +472,18 @@ class Creatures:
 
         self.activations.clear()
         learning = getattr(self.cfg, 'lifetime_learning', 0)
+        learn_hidden = learning and getattr(self.cfg, 'learn_hidden_layer', 0)
         n_layers = len(self.weights)
         for i, (w, b) in enumerate(zip(self.weights, self.biases)):
             self.activations.append(inputs)
             pre = inputs.to(w.dtype) @ w + b   # b is float32, so this promotes back to float32
             noise = None
+            if learn_hidden and i == n_layers - 2:   # lifetime-learned part of the last hidden layer
+                pre = pre + inputs @ self.hidden_learned_weights
+                hidden_noise = torch.randn_like(pre) * self.cfg.learning_noise
+                pre = pre + hidden_noise
+                self.hidden_last_inputs[:] = inputs.squeeze(1)
+                self.hidden_last_noise[:] = hidden_noise.squeeze(1)
             if learning and i == n_layers - 1:
                 learned = inputs @ self.learned_weights   # lifetime-learned part of the last layer
                 head = pre[..., :self.n_learn] + learned
@@ -510,6 +526,14 @@ class Creatures:
             update = self.learning_traces.data
         self.learned_weights[:] = (self.learned_weights.data + scale * update).clamp_(
             -cfg.learned_weight_clip, cfg.learned_weight_clip)
+        if getattr(cfg, 'learn_hidden_layer', 0):   # same rule for the last hidden layer
+            update = self.hidden_last_inputs.data[:, :, None] * self.hidden_last_noise.data[:, None, :]
+            if cfg.learning_trace_decay > 0:
+                decay = cfg.learning_trace_decay
+                self.hidden_learning_traces[:] = decay * self.hidden_learning_traces.data + (1 - decay) * update
+                update = self.hidden_learning_traces.data
+            self.hidden_learned_weights[:] = (self.hidden_learned_weights.data + scale * update).clamp_(
+                -cfg.learned_weight_clip, cfg.learned_weight_clip)
 
     def rotate_creatures(self, outputs: Tensor, state: GameState):
         """Given the neural network outputs `outputs`, rotate each creature accordingly.

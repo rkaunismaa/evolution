@@ -144,6 +144,10 @@ class Config:
     # switches the rule from Hebbian (hidden x output) to node perturbation (hidden x noise), which
     # learns which deviations from the current behaviour pay off. 0 = no noise, Hebbian
     learning_noise: float = 0.1
+    # 1 = the last hidden layer learns too (same rule, with its own exploration noise), so learning can
+    # change which features the brain computes, not just how they map to movement. About 2 GB more GPU
+    # memory at 131,072 creatures with the large preset's brain. 0 = only the last layer learns
+    learn_hidden_layer: int = 0
     reward_avg_decay: float = 0.99     # running averages of each creature's reward and its spread
 
     ## vision

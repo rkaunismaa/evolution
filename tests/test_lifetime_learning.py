@@ -196,3 +196,28 @@ def test_exploration_noise_drives_the_update(make_world):
     hidden, noise = c.last_hidden.data.clone(), c.last_outputs.data.clone()
     c.learn()
     torch.testing.assert_close(c.learned_weights.data, 0.1 * hidden[:, :, None] * noise[:, None, :])
+
+
+def test_hidden_layer_learning(make_world):
+    world = make_world(lifetime_learning=1, learn_hidden_layer=1, learning_trace_decay=0.0)
+    c = world.creatures
+    h_in, h_out = c.weights[-2]._shape
+    assert c.hidden_learned_weights._shape == (h_in, h_out)
+    world.step()
+    stimuli = c.collect_stimuli(world.collisions, world.food_grid).unsqueeze(1)
+    c.forward(stimuli)
+    torch.testing.assert_close(c.hidden_last_inputs.data, c.activations[-3].squeeze(1))
+    assert 0.05 < c.hidden_last_noise.data.std().item() < 0.15        # learning_noise 0.1
+    c.reward_avgs.data[:] = 0.0
+    c.reward_spreads.data[:] = 1.0
+    c.learning_rates.data[:] = 0.1
+    c.hidden_learned_weights.data[:] = 0.0
+    c.last_energies.data[:] = c.energies.data - 1.0
+    x, noise = c.hidden_last_inputs.data.clone(), c.hidden_last_noise.data.clone()
+    c.learn()
+    torch.testing.assert_close(c.hidden_learned_weights.data,
+                               (0.1 * x[:, :, None] * noise[:, None, :]).clamp(-0.2, 0.2))
+
+
+def test_hidden_layer_learning_off_by_default(make_world):
+    assert 'hidden_learned_weights' not in make_world(lifetime_learning=1).creatures.traits.variables
